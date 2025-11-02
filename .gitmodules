@@ -1,0 +1,3 @@
+[submodule "src/omap_loader"]
+	path = src/omap_loader
+	url = https://github.com/ajb142/omap_loader.git
