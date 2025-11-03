@@ -1,5 +1,9 @@
 # Nest Thermostat Firmware Setup
 
+> **⚠️ WARNING: EXPERIMENTAL SOFTWARE**
+>
+> This project is currently in the **experimental/testing phase**. Do NOT use this firmware on any thermostat that is critical for your heating or cooling needs. Flashing this firmware may brick your device or cause unexpected behavior. Only proceed if you have a backup thermostat or can afford to have your device non-functional during testing.
+
 This directory contains the tools and firmware needed to flash custom firmware to Nest Thermostat devices using the OMAP DFU (Device Firmware Update) interface.
 
 ## Overview
@@ -8,23 +12,44 @@ This firmware loader uses the OMAP bootloader interface to flash custom bootload
 
 **Important:** After flashing this firmware, your device will no longer contact Nest/Google servers. It will operate independently and connect to the NoLongerEvil platform instead, giving you complete control over your thermostat.
 
-## Credits & Acknowledgments
+## How it Works
 
-This project builds upon the excellent work of several security researchers and developers:
+The custom firmware flashes the device with modified bootloader and kernel components that redirect all network traffic from the original Nest/Google servers to a server we specify. This server hosts a reverse-engineered replica of their API, allowing the thermostat to function independently while giving you complete control over your device data and settings.
 
-- **[grant-h](https://github.com/grant-h) / [ajb142](https://github.com/ajb142)** - [omap_loader](https://github.com/ajb142/omap_loader), the USB bootloader tool used to flash OMAP devices
-- **[exploiteers (GTVHacker)](https://github.com/exploiteers)** - Original research and development of the [Nest DFU attack](https://github.com/exploiteers/NestDFUAttack), which demonstrated the ability to flash custom firmware to Nest devices gen 1 & gen 2
-- **[FULU](https://bounties.fulu.org/)** and all bounty backers - For funding the [Nest Learning Thermostat Gen 1/2 bounty](https://bounties.fulu.org/bounties/nest-learning-thermostat-gen-1-2) and supporting the right-to-repair movement
-
-Without their groundbreaking research, open-source contributions, and advocacy for device ownership rights, this work would not be possible. Thank you!
-
-### Open Source Commitment
-
-We are committed to transparency and the right-to-repair movement. The firmware images and backend API server code will be open sourced soon, allowing the community to audit, improve, and self-host their own infrastructure.
+By intercepting the communication layer, the thermostat believes it's communicating with the official Nest infrastructure, but instead connects to the NoLongerEvil platform. This approach ensures full compatibility with the device's existing software while breaking free from Google's cloud dependency.
 
 ## Quick Start
 
-### 1. Build the omap_loader tool
+### 1. Install Prerequisites
+
+Before building, you'll need to install some required packages:
+
+#### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt-get update
+sudo apt-get install build-essential libusb-1.0-0-dev
+```
+
+#### macOS
+
+First, install Xcode Command Line Tools:
+
+```bash
+xcode-select --install
+```
+
+Then install libusb using Homebrew (the build script will attempt to install this automatically if missing):
+
+```bash
+# Install Homebrew if you don't have it
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install libusb
+brew install libusb
+```
+
+### 2. Build the omap_loader tool
 
 ```bash
 ./build.sh
@@ -32,17 +57,27 @@ We are committed to transparency and the right-to-repair movement. The firmware 
 
 The build script will automatically detect your operating system (Linux, macOS, or Windows) and build the appropriate binary.
 
-### 2. Start the firmware loader
+### 3. Start the firmware installer
 
-**IMPORTANT: You must start the loader script BEFORE rebooting the device.**
+**IMPORTANT: You must start the installer script BEFORE rebooting the device.**
+
+#### Linux
 
 ```bash
 sudo ./install.sh
 ```
 
+#### macOS
+
+```bash
+sudo ./install.sh
+```
+
+**Note for macOS:** You may need to grant USB permissions. If you encounter permission issues, check System Preferences → Security & Privacy.
+
 The script will wait for the device to enter DFU mode.
 
-### 3. Put your Nest device in DFU mode
+### 4. Put your Nest device in DFU mode
 
 Follow these steps carefully:
 
@@ -55,7 +90,7 @@ Follow these steps carefully:
 
 The firmware installer will automatically detect the device and flash the custom bootloader (x-load, u-boot) and kernel (uImage).
 
-### 4. Wait for the device to boot
+### 5. Wait for the device to boot
 
 After the firmware is flashed successfully, you should see our logo on the device screen:
 
@@ -63,10 +98,10 @@ After the firmware is flashed successfully, you should see our logo on the devic
 
 **Important:**
 - Keep the device plugged in via USB
-- Wait for the device to complete its boot sequence (this may take 2-3 minutes)
+- Wait for the device to complete its boot sequence (this may take 3-4 minutes)
 - Do not disconnect or power off the device during this time
 
-### 5. Register your account
+### 6. Register your account
 
 Once the device has fully rebooted:
 
@@ -76,7 +111,7 @@ Once the device has fully rebooted:
 
 You will see a "No devices" screen that prompts you for an entry code.
 
-### 6. Link your device
+### 7. Link your device
 
 To link your Nest device to your NoLongerEvil account:
 
@@ -101,6 +136,20 @@ This tool provides low-level access to the device's boot process. Use responsibl
 
 - Only use on devices you own
 - Improper firmware can brick your device (Don't sue me bro)
+
+## Credits & Acknowledgments
+
+This project builds upon the excellent work of several security researchers and developers:
+
+- **[grant-h](https://github.com/grant-h) / [ajb142](https://github.com/ajb142)** - [omap_loader](https://github.com/ajb142/omap_loader), the USB bootloader tool used to flash OMAP devices
+- **[exploiteers (GTVHacker)](https://github.com/exploiteers)** - Original research and development of the [Nest DFU attack](https://github.com/exploiteers/NestDFUAttack), which demonstrated the ability to flash custom firmware to Nest devices gen 1 & gen 2
+- **[FULU](https://bounties.fulu.org/)** and all bounty backers - For funding the [Nest Learning Thermostat Gen 1/2 bounty](https://bounties.fulu.org/bounties/nest-learning-thermostat-gen-1-2) and supporting the right-to-repair movement
+
+Without their groundbreaking research, open-source contributions, and advocacy for device ownership rights, this work would not be possible. Thank you!
+
+### Open Source Commitment
+
+We are committed to transparency and the right-to-repair movement. The firmware images and backend API server code will be open sourced soon, allowing the community to audit, improve, and self-host their own infrastructure.
 
 ## References
 
