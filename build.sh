@@ -7,6 +7,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 BIN_DIR="$SCRIPT_DIR/bin"
 SRC_DIR="$SCRIPT_DIR/src/omap_loader"
+PATCH_FILE="$SCRIPT_DIR/patches/omap_loader_mac.patch"
 
 # Detect OS
 OS="$(uname -s)"
@@ -117,25 +118,29 @@ case "$OS" in
 esac
 
 echo ""
-echo "========================================="
-echo "Checking source directory..."
-echo "========================================="
-if [ ! -d "$SRC_DIR" ]; then
-    echo "Error: Source directory not found at: $SRC_DIR"
-    echo "Please ensure omap_loader is cloned in the src/ directory"
-    exit 1
+
+echo "Patching omap_loader for macOS..."
+PATCH_APPLIED=0
+if [ "$OS" = "Darwin" ] && [ -f "$PATCH_FILE" ]; then
+    echo "Applying macOS libusb adjustments..."
+    if patch -p0 --dry-run --silent < "$PATCH_FILE" 2>&1 | grep -q "previously applied"; then
+        echo "macOS patch already applied."
+    elif patch -p0 --dry-run --silent < "$PATCH_FILE" > /dev/null 2>&1; then
+        patch -p0 < "$PATCH_FILE"
+        PATCH_APPLIED=1
+        echo "macOS patch applied successfully."
+    else
+        echo "Warning: Unable to apply patch cleanly. Continuing anyway..."
+    fi
 fi
 
-echo ""
-echo "========================================="
-echo "Building from source..."
-echo "========================================="
 cd "$SRC_DIR"
 
 echo ""
 echo "========================================="
 echo "Building..."
 echo "========================================="
+make clean
 make
 
 echo ""
@@ -146,8 +151,14 @@ mkdir -p "$TARGET_DIR"
 cp "$BINARY_NAME" "$TARGET_DIR/"
 chmod +x "$TARGET_DIR/$BINARY_NAME"
 
-# Cleanup
+if [ "$PATCH_APPLIED" = "1" ]; then
+    echo "Reverting macOS adjustments..."
+    cd "$SCRIPT_DIR"
+    patch -p0 -R < "$PATCH_FILE"
+fi
+
 echo ""
+echo "Cleaning build artifacts..."
 rm -f "$BINARY_NAME"
 make clean
 echo "Returning to script directory..."

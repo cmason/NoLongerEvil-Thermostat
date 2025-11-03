@@ -58,12 +58,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 /* TODO: dynamically discover these endpoints */
 #define OMAP_USB_BULK_IN 0x81
 #define OMAP_USB_BULK_OUT 0x01
-#define OMAP_USB_INTERFACE 0
-#define OMAP_USB_CONFIGURATION 1
 #define OMAP_ASIC_ID_LEN 69
-#define OMAP_USB_MAX_RECOVERIES 10
-#define OMAP_USB_CLEAR_TIMEOUT_US 5000
-#define OMAP_USB_MAX_XFER (64 * 1024)
 
 #ifdef OMAP_IS_BIG_ENDIAN
 # define cpu_to_le32(v) (((v & 0xff) << 24) | ((v & 0xff00) << 8) | \
@@ -85,8 +80,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define USBLOAD_CMD_MESSAGE PACK4('U','S','B','m')   /* debug message */
 
 /* USB transfer characteristics */
-#define USB_MAX_WAIT 20000
-#define USB_TIMEOUT 4000
+#define USB_MAX_WAIT 5000
+#define USB_TIMEOUT 1000
 #define USB_MAX_TIMEOUTS (USB_MAX_WAIT/USB_TIMEOUT)
 
 /* Datatypes
@@ -209,56 +204,9 @@ omap_usb_open(libusb_context * ctx, uint16_t vendor, uint16_t product)
       usleep(10000);
   }
 
-  unsigned char * mfgStr = NULL;
-  unsigned char * prodStr = NULL;
-
-#ifdef LIBUSB_API_VERSION
-  ret = libusb_set_auto_detach_kernel_driver(handle, 1);
-
-  if(ret < 0 && ret != LIBUSB_ERROR_NOT_SUPPORTED)
-  {
-    log_error("failed to enable auto detach for kernel drivers: %s\n",
-        libusb_error_name(ret));
-    libusb_close(handle);
-    return NULL;
-  }
-#endif
-
-  int active_config = 0;
-  ret = libusb_get_configuration(handle, &active_config);
-
-  if(ret < 0)
-  {
-    log_error("failed to query active USB configuration: %s\n",
-        libusb_error_name(ret));
-    libusb_close(handle);
-    return NULL;
-  }
-
-  if(active_config == 0)
-  {
-    ret = libusb_set_configuration(handle, OMAP_USB_CONFIGURATION);
-
-    if(ret < 0 && ret != LIBUSB_ERROR_BUSY)
-    {
-      log_error("failed to select USB configuration %d: %s\n",
-          OMAP_USB_CONFIGURATION, libusb_error_name(ret));
-      libusb_close(handle);
-      return NULL;
-    }
-  }
-
-  if((ret = libusb_claim_interface(handle, OMAP_USB_INTERFACE)) < 0)
-  {
-    log_error("failed to claim interface %d: %s\n",
-        OMAP_USB_INTERFACE, libusb_error_name(ret));
-    libusb_close(handle);
-    return NULL;
-  }
-
   /* grab the manufacturer and product strings for printing */
-  mfgStr = omap_usb_get_string(handle, desc.iManufacturer);
-  prodStr = omap_usb_get_string(handle, desc.iProduct);
+  unsigned char * mfgStr = omap_usb_get_string(handle, desc.iManufacturer);
+  unsigned char * prodStr = omap_usb_get_string(handle, desc.iProduct);
 
   log_info("successfully opened %04hx:%04hx (", vendor, product);
 
@@ -339,7 +287,7 @@ unsigned char * read_file(char * path, size_t * readamt)
 
   while(1)
   {
-    if(iter >= allocSize)
+    if(iter >= iter)
     {
       allocSize += 1024;
       data = realloc(data, allocSize);
@@ -407,8 +355,8 @@ int process_args(struct arg_state * args)
     }
   }
 
-  libusb_context * ctx = NULL;
-  libusb_device_handle * dev = NULL;
+  libusb_context * ctx;
+  libusb_device_handle * dev;
   int ret;
 
   if((ret = libusb_init(&ctx)) < 0)
@@ -426,6 +374,12 @@ int process_args(struct arg_state * args)
     return 1;
   }
 
+  if((ret = libusb_claim_interface(dev, 0)) < 0)
+  {
+    log_error("failed to claim interface: %s\n", libusb_error_name(ret));
+    return ret;
+  }
+
   /* Communicate with the TI BootROM directly
       - retrieve ASIC ID
       - start peripheral boot
@@ -439,8 +393,10 @@ int process_args(struct arg_state * args)
     goto fail;
   }
 
-  /* give the device time to bring X-loader fully online */
-  usleep(200 * 1000);
+  /* Wait a moment before attempting to communicate with X-loader. If we don't
+   * wait here, some computers end up failing to upload additional files.
+   */
+  usleep(20000);
   
   /* If we are passed one file, assume that the user just wants to
      upload some initial code with no X-loader chaining
@@ -457,17 +413,13 @@ int process_args(struct arg_state * args)
   log_info("successfully transfered %d %s\n", args->numFiles,
       (args->numFiles > 1) ? "files" : "file");
 
-  libusb_release_interface(dev, OMAP_USB_INTERFACE);
+  /* safely close our USB handle and context */
   libusb_close(dev);
   libusb_exit(ctx);
   return 0;
 
 fail:
-  if(dev)
-  {
-    libusb_release_interface(dev, OMAP_USB_INTERFACE);
-    libusb_close(dev);
-  }
+  libusb_close(dev);
   libusb_exit(ctx);
 
   return 1;
@@ -479,7 +431,6 @@ bool omap_usb_read(libusb_device_handle * handle, unsigned char * data,
   int ret = 0;
   int iter = 0;
   int sizeLeft = length;
-  int recoveries = 0;
 
   if(!actualLength)
     return false;
@@ -489,9 +440,7 @@ bool omap_usb_read(libusb_device_handle * handle, unsigned char * data,
     int actualRead = 0;
     int readAmt = sizeLeft;
 
-    if(readAmt > OMAP_USB_MAX_XFER)
-      readAmt = OMAP_USB_MAX_XFER;
-
+    usleep(1000);
     ret = libusb_bulk_transfer(handle, OMAP_USB_BULK_IN, data+iter,
         readAmt, &actualRead, USB_TIMEOUT);
 
@@ -522,41 +471,6 @@ bool omap_usb_read(libusb_device_handle * handle, unsigned char * data,
     }
     else
     {
-      if(ret == LIBUSB_ERROR_PIPE || ret == LIBUSB_ERROR_IO)
-      {
-        if(recoveries >= OMAP_USB_MAX_RECOVERIES)
-        {
-          log_error(
-              "usb bulk in stalled too many times while transfering %d bytes "
-              "(got %d): %s\n",
-              length, iter, libusb_error_name(ret));
-          return false;
-        }
-
-        recoveries++;
-
-        int clear = libusb_clear_halt(handle, OMAP_USB_BULK_IN);
-
-        if(clear < 0)
-        {
-          if(clear == LIBUSB_ERROR_NOT_FOUND ||
-             clear == LIBUSB_ERROR_NO_DEVICE ||
-             clear == LIBUSB_ERROR_OTHER)
-          {
-            /* transient condition; retry */
-          }
-          else
-          {
-            log_error("failed to clear BULK_IN halt condition: %s\n",
-                libusb_error_name(clear));
-            return false;
-          }
-        }
-
-        usleep(OMAP_USB_CLEAR_TIMEOUT_US);
-        continue;
-      }
-
       log_error(
           "fatal transfer error (BULK_IN) for %d bytes (got %d): %s\n",
           length, iter, libusb_error_name(ret));
@@ -576,16 +490,15 @@ bool omap_usb_write(libusb_device_handle * handle, unsigned char * data,
   int numTimeouts = 0;
   int iter = 0;
   int sizeLeft = length;
-  int recoveries = 0;
 
   while(sizeLeft > 0)
   {
     int actualWrite = 0;
     int writeAmt = sizeLeft;
+    /* Only send 512 bytes at a time. Helps with reliability sometimes. */
+    if(writeAmt > 512) { writeAmt = 512; }
 
-    if(writeAmt > OMAP_USB_MAX_XFER)
-      writeAmt = OMAP_USB_MAX_XFER;
-
+    usleep(1000);
     ret = libusb_bulk_transfer(handle, OMAP_USB_BULK_OUT, data+iter,
         writeAmt, &actualWrite, USB_TIMEOUT);
 
@@ -612,41 +525,6 @@ bool omap_usb_write(libusb_device_handle * handle, unsigned char * data,
     }
     else
     {
-      if(ret == LIBUSB_ERROR_PIPE || ret == LIBUSB_ERROR_IO)
-      {
-        if(recoveries >= OMAP_USB_MAX_RECOVERIES)
-        {
-          log_error(
-              "usb bulk out stalled too many times while transfering %d bytes "
-              "(%d made it): %s\n",
-              length, iter, libusb_error_name(ret));
-          return false;
-        }
-
-        recoveries++;
-
-        int clear = libusb_clear_halt(handle, OMAP_USB_BULK_OUT);
-
-        if(clear < 0)
-        {
-          if(clear == LIBUSB_ERROR_NOT_FOUND ||
-             clear == LIBUSB_ERROR_NO_DEVICE ||
-             clear == LIBUSB_ERROR_OTHER)
-          {
-            /* transient condition; retry */
-          }
-          else
-          {
-            log_error("failed to clear BULK_OUT halt condition: %s\n",
-                libusb_error_name(clear));
-            return false;
-          }
-        }
-
-        usleep(OMAP_USB_CLEAR_TIMEOUT_US);
-        continue;
-      }
-
       log_error(
           "fatal transfer error (BULK_OUT) for %d bytes (%d made it): %s\n",
           length, iter, libusb_error_name(ret));
@@ -866,9 +744,6 @@ int transfer_other_files(libusb_device_handle * handle, struct arg_state * args)
     }
   }
 
-  /* allow the device to settle before issuing the final jump */
-  usleep(500 * 1000);
-
   /* we're done uploading files to X-loader send the jump command */
   int jumpCmd[3];
   jumpCmd[0] = cpu_to_le32(USBLOAD_CMD_JUMP);
@@ -1008,7 +883,7 @@ int main(int argc, char * argv[])
   char * exe = NULL;
 
   /* temporary local file object */
-  struct file_upload file = {0};
+  struct file_upload file;
   /* total arg state */
   struct arg_state * args = calloc(1, sizeof(*args));
 
@@ -1066,8 +941,7 @@ int main(int argc, char * argv[])
         file.addr = OMAP_BASE_ADDRESS;
 
         /* commit the file object with the processor specified base address */
-        args->files = realloc(args->files,
-            fileCount * sizeof(*args->files));
+        args->files = realloc(args->files, fileCount);
         args->numFiles = fileCount;
         args->files[fileCount-1] = malloc(sizeof(file));
         memcpy(args->files[fileCount-1], &file, sizeof(file));
@@ -1093,8 +967,7 @@ int main(int argc, char * argv[])
       file.addr = strtoul(optarg, NULL, 0);
 
       /* commit the file object */
-      args->files = realloc(args->files,
-          fileCount * sizeof(*args->files));
+      args->files = realloc(args->files, fileCount);
       args->numFiles = fileCount;
       args->files[fileCount-1] = malloc(sizeof(file));
       memcpy(args->files[fileCount-1], &file, sizeof(file));
