@@ -153,8 +153,9 @@ chmod +x "$TARGET_DIR/$BINARY_NAME"
 
 if [ "$PATCH_APPLIED" = "1" ]; then
     echo "Reverting macOS adjustments..."
-    cd "$SCRIPT_DIR"
+    pushd "$SCRIPT_DIR"
     patch -p0 -R < "$PATCH_FILE"
+    popd
 fi
 
 echo ""
