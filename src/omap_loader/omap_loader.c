@@ -287,7 +287,7 @@ unsigned char * read_file(char * path, size_t * readamt)
 
   while(1)
   {
-    if(iter >= iter)
+    if(iter >= allocSize)
     {
       allocSize += 1024;
       data = realloc(data, allocSize);
@@ -941,7 +941,7 @@ int main(int argc, char * argv[])
         file.addr = OMAP_BASE_ADDRESS;
 
         /* commit the file object with the processor specified base address */
-        args->files = realloc(args->files, fileCount);
+        args->files = realloc(args->files, fileCount * sizeof(struct file_upload *));
         args->numFiles = fileCount;
         args->files[fileCount-1] = malloc(sizeof(file));
         memcpy(args->files[fileCount-1], &file, sizeof(file));
@@ -967,7 +967,7 @@ int main(int argc, char * argv[])
       file.addr = strtoul(optarg, NULL, 0);
 
       /* commit the file object */
-      args->files = realloc(args->files, fileCount);
+      args->files = realloc(args->files, fileCount * sizeof(struct file_upload *));
       args->numFiles = fileCount;
       args->files[fileCount-1] = malloc(sizeof(file));
       memcpy(args->files[fileCount-1], &file, sizeof(file));
