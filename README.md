@@ -4,6 +4,18 @@
 >
 > This project is currently in the **experimental/testing phase**. Do NOT use this firmware on any thermostat that is critical for your heating or cooling needs. Flashing this firmware may brick your device or cause unexpected behavior. Only proceed if you have a backup thermostat or can afford to have your device non-functional during testing.
 
+## A Note from the Developer
+
+This project has blown up way more than I ever expected! I want to be transparent: this was thrown together in a couple of days, so it's still very new and a work in progress. Thank you all so much for your support and enthusiasm!
+
+**Self-Hosted Open Source Option Available:** A self-hosted open source solution has been posted on the [`open-source-prototype`](https://github.com/codykociemba/NoLongerEvil-Thermostat/tree/open-source-prototype) branch. Check out the [discussion here](https://github.com/codykociemba/NoLongerEvil-Thermostat/discussions/34) for more details.
+
+**Hardware Alternative:** If you're interested in the hardware side of things, check out [https://sett.homes](https://sett.homes) for a drop-in PCB replacement option.
+
+**Important:** The README instructions below are for the hosted version only. If you're adventurous, feel free to dive into the self-hosted branch. Otherwise, you may want to wait until it's been fully fleshed out if you don't want to deal with bugs.
+
+---
+
 This directory contains the tools and firmware needed to flash custom firmware to Nest Thermostat devices using the OMAP DFU (Device Firmware Update) interface.
 
 ## Prerequesites
