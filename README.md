@@ -71,7 +71,7 @@ Then install libusb using Homebrew (the build script will attempt to install thi
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install libusb
-brew install libusb
+brew install libusb pkg-config
 ```
 
 ### 3. Build the omap_loader tool
