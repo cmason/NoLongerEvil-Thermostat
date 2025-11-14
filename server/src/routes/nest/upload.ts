@@ -4,7 +4,7 @@
  */
 
 import { IncomingMessage, ServerResponse } from 'http';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { environment } from '../../config/environment';
 
@@ -22,6 +22,12 @@ export function handleUpload(req: IncomingMessage, res: ServerResponse): void {
   
   req.on('end', () => {
     const buffer = Buffer.concat(chunks);
+    
+    // Ensure debug logs directory exists
+    if (!existsSync(environment.DEBUG_LOGS_DIR)) {
+      mkdirSync(environment.DEBUG_LOGS_DIR, { recursive: true });
+      console.log(`[Upload] Created logs directory: ${environment.DEBUG_LOGS_DIR}`);
+    }
     
     // Extract metadata from headers
     const sequenceNumber = req.headers['x-nl-log-file-sequence-number'] as string;
