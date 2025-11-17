@@ -50,6 +50,11 @@ jobs:
           rm -rf node_modules package-lock.json
           npm install
 
+      - name: Rebuild native modules for Electron
+        working-directory: firmware/installer
+        run: |
+          npx electron-rebuild -f -w usb
+
       - name: Build Vite app
         working-directory: firmware/installer
         run: npm run build
