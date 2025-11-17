@@ -29,6 +29,7 @@
       "resources/**/*",
       "package.json"
     ],
+    "artifactName": "nolongerevil-installer-${os}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.utilities",
       "hardenedRuntime": true,
@@ -51,7 +52,14 @@
         "AppImage"
       ],
       "category": "Utility"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "codykociemba",
+        "repo": "NoLongerEvil-Thermostat"
+      }
+    ]
   },
   "dependencies": {
     "react": "^18.2.0",
