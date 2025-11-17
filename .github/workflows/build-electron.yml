@@ -38,7 +38,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: firmware/installer
-        run: npm install
+        run: npm ci
 
       - name: Build Vite app
         working-directory: firmware/installer
