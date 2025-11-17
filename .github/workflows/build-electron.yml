@@ -2,14 +2,13 @@ name: Build Electron App
 
 on:
   push:
-    branches:
-      - open-source-prototype
+    branches: [open-source-prototype]
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest]
 
@@ -51,7 +50,7 @@ jobs:
           mkdir -p ~/private_keys/
           echo '${{ secrets.API_KEY }}' > ~/private_keys/AuthKey_${{ secrets.API_KEY_ID }}.p8
 
-      - name: Build Electron app (macOS - zip only)
+      - name: Build Electron app (macOS)
         if: matrix.os == 'macos-latest'
         uses: samuelmeuli/action-electron-builder@v1
         env:
@@ -70,10 +69,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-app-macos
-          path: |
-            firmware/installer/dist/*.zip
+          path: firmware/installer/dist/*.zip
 
-      - name: Build Electron app (Linux - AppImage only)
+      - name: Build Electron app (Linux)
         if: matrix.os == 'ubuntu-latest'
         uses: samuelmeuli/action-electron-builder@v1
         with:
@@ -87,5 +85,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-app-linux
-          path: |
-            firmware/installer/dist/*.AppImage
+          path: firmware/installer/dist/*.AppImage

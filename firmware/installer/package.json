@@ -5,6 +5,10 @@
   "main": "electron/main.js",
   "author": "NoLongerEvil",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codykociemba/NoLongerEvil-Thermostat"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

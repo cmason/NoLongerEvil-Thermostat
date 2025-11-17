@@ -90,12 +90,12 @@ async function injectWeatherData(stateResponse: StateResponse): Promise<StateRes
       const cached = weatherCache.get(serial);
 
       let weatherData;
-      if (cached && (now - cached.timestamp) < WEATHER_CACHE_TTL) {
+      if (cached && cached.data?.fetchedAt && (now - cached.data.fetchedAt) < WEATHER_CACHE_TTL) {
         weatherData = cached.data;
       } else {
         weatherData = await getWeatherBySerial(serial);
-        if (weatherData) {
-          weatherCache.set(serial, { data: weatherData, timestamp: now });
+        if (weatherData?.fetchedAt) {
+          weatherCache.set(serial, { data: weatherData, timestamp: weatherData.fetchedAt });
         }
       }
 
