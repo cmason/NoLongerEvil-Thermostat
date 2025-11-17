@@ -21,6 +21,7 @@
     "afterSign": "electron-builder-notarize",
     "appId": "com.nolongerevil.installer",
     "productName": "NoLongerEvil Installer",
+    "icon": "appicon.png",
     "directories": {
       "output": "dist"
     },

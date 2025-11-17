@@ -58,13 +58,28 @@ jobs:
         env:
           API_KEY_ID: ${{ secrets.API_KEY_ID }}
           API_KEY_ISSUER_ID: ${{ secrets.API_KEY_ISSUER_ID }}
+          APPLE_API_KEY: ${{ secrets.API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.API_KEY_ISSUER_ID }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           package_root: firmware/installer
           mac_certs: ${{ secrets.MAC_CERTS }}
           mac_certs_password: ${{ secrets.MAC_CERTS_PASSWORD }}
           skip_build: false
-          args: --mac zip --publish never
+          args: --publish never
+
+      - name: Show notarization error log
+        if: failure() && matrix.os == 'macos-latest'
+        working-directory: firmware/installer
+        run: |
+          if [ -f notarization-error.log ]; then
+            echo "=== Notarization Error Log (sanitized) ==="
+            cat notarization-error.log | sed -E 's/([A-Z0-9]{10})[A-Z0-9]+/\1***/g' | sed 's|/Users/[^/]+|/Users/***|g'
+          else
+            echo "No notarization-error.log found"
+            echo "Notarization failed but no error log was generated"
+          fi
 
       - name: Upload artifacts (macOS)
         if: matrix.os == 'macos-latest'
