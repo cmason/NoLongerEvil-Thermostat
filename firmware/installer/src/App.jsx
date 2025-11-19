@@ -19,6 +19,7 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState(SCREENS.WELCOME);
   const [systemInfo, setSystemInfo] = useState(null);
   const [generation, setGeneration] = useState(null);
+  const [customFiles, setCustomFiles] = useState(null);
   const [error, setError] = useState(null);
   const [platform, setPlatform] = useState(null);
 
@@ -79,8 +80,9 @@ function App() {
 
         {currentScreen === SCREENS.GENERATION_SELECT && (
           <GenerationSelect
-            onNext={(gen) => {
-              setGeneration(gen);
+            onNext={(config) => {
+              setGeneration(config.generation);
+              setCustomFiles(config.customFiles);
               handleNext(SCREENS.INSTALL);
             }}
             onBack={() => setCurrentScreen(SCREENS.SYSTEM_CHECK)}
@@ -91,6 +93,7 @@ function App() {
           <InstallScreen
             systemInfo={systemInfo}
             generation={generation}
+            customFiles={customFiles}
             onSuccess={() => handleNext(SCREENS.SUCCESS)}
             onError={handleError}
             onBack={() => setCurrentScreen(SCREENS.GENERATION_SELECT)}

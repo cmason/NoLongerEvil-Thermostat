@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const { checkSystem, installFirmware, detectDevice } = require('./usb-handler');
 const { installWinUSBDriver } = require('./windows-driver');
@@ -86,9 +86,10 @@ ipcMain.handle('detect-device', async () => {
 ipcMain.handle('install-firmware', async (event, options) => {
   try {
     const generation = options?.generation || 'gen2';
+    const customFiles = options?.customFiles || null;
     const result = await installFirmware((progress) => {
       mainWindow.webContents.send('installation-progress', progress);
-    }, generation);
+    }, generation, customFiles);
     return result;
   } catch (error) {
     console.error('Installation error:', error);
@@ -211,6 +212,34 @@ ipcMain.handle('install-windows-driver', async () => {
     return result;
   } catch (error) {
     console.error('Windows driver installation error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('select-firmware-file', async (event, fileType) => {
+  try {
+    const filters = [
+      { name: 'Binary Files', extensions: ['bin'] }
+    ];
+
+    // For uImage, also allow files without extension
+    if (fileType === 'uimage') {
+      filters.unshift({ name: 'uImage', extensions: ['*'] });
+    }
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: `Select ${fileType} firmware file`,
+      properties: ['openFile'],
+      filters: filters
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return { success: true, filePath: result.filePaths[0] };
+  } catch (error) {
+    console.error('File selection error:', error);
     return { success: false, error: error.message };
   }
 });

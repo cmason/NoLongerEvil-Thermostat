@@ -488,7 +488,7 @@ build_firmware_multi_gen() {
       if [ "$HOSTED_MODE" = true ] || [ "$API_URL" = "https://backdoor.nolongerevil.com" ]; then
         CA_CERT_CONTENT="-----BEGIN CERTIFICATE-----
 MIIF+TCCA+GgAwIBAgIUP0dbiF2u6BuJE/7m7jN1amlzSnowDQYJKoZIhvcNAQEL
-BQawgYsxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRIwEAYDVQQH
+BQAwgYsxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRIwEAYDVQQH
 DAlQYWxvIEFsdG8xEjAQBgNVBAoMCU5lc3QgTGFiczENMAsGA1UECwwETmVzdDEw
 MC4GA1UEAwwnTmVzdCBQcml2YXRlIFJvb3QgQ2VydGlmaWNhdGUgQXV0aG9yaXR5
 MB4XDTI1MTAzMTA3MzMzMVoXDTM1MTAyOTA3MzMzMVowgYsxCzAJBgNVBAYTAlVT
@@ -596,7 +596,6 @@ ROOTME_EOF
 
         cat >> "$ROOTME_SCRIPT" << 'ROOTME_EOF'
 CA_CERT_EOF
-chmod 644 /tmp/1/etc/ssl/certs/ca-bundle.pem || true
 
 ROOTME_EOF
       fi

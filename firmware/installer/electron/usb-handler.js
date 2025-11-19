@@ -58,7 +58,17 @@ function getBinaryPath() {
   return binaryPath;
 }
 
-function getFirmwarePaths(generation = 'gen2') {
+function getFirmwarePaths(generation = 'gen2', customFiles = null) {
+  // If custom files are provided and all three are specified, use them
+  if (customFiles && customFiles.xload && customFiles.uboot && customFiles.uimage) {
+    return {
+      xload: customFiles.xload,
+      uboot: customFiles.uboot,
+      uimage: customFiles.uimage
+    };
+  }
+
+  // Otherwise, use the bundled firmware
   const firmwareDir = getResourcePath('firmware');
 
   return {
@@ -191,7 +201,7 @@ async function detectDevice() {
   }
 }
 
-async function installFirmware(progressCallback, generation = 'gen2') {
+async function installFirmware(progressCallback, generation = 'gen2', customFiles = null) {
   if (process.platform === 'win32') {
     const isAdmin = await checkIsAdmin();
     if (!isAdmin) {
@@ -235,7 +245,7 @@ async function installFirmware(progressCallback, generation = 'gen2') {
   return new Promise((resolve, reject) => {
     try {
       const binaryPath = getBinaryPath();
-      const firmwarePaths = getFirmwarePaths(generation);
+      const firmwarePaths = getFirmwarePaths(generation, customFiles);
 
       const args = [
         '-f', firmwarePaths.xload,
