@@ -53,11 +53,11 @@ function getBinaryPath() {
   return binaryPath;
 }
 
-function getFirmwarePaths() {
+function getFirmwarePaths(generation = 'gen2') {
   const firmwareDir = getResourcePath('firmware');
 
   return {
-    xload: path.join(firmwareDir, 'x-load.bin'),
+    xload: path.join(firmwareDir, `x-load-${generation}.bin`),
     uboot: path.join(firmwareDir, 'u-boot.bin'),
     uimage: path.join(firmwareDir, 'uImage')
   };
@@ -191,7 +191,7 @@ async function detectDevice() {
   }
 }
 
-async function installFirmware(progressCallback) {
+async function installFirmware(progressCallback, generation = 'gen2') {
   if (process.platform === 'win32') {
     const isAdmin = await checkIsAdmin();
     if (!isAdmin) {
@@ -235,7 +235,7 @@ async function installFirmware(progressCallback) {
   return new Promise((resolve, reject) => {
     try {
       const binaryPath = getBinaryPath();
-      const firmwarePaths = getFirmwarePaths();
+      const firmwarePaths = getFirmwarePaths(generation);
 
       const args = [
         '-f', firmwarePaths.xload,
