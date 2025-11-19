@@ -15,7 +15,7 @@ function getResourcePath(relativePath) {
   }
 
   if (app && app.isPackaged) {
-    return path.join(process.resourcesPath, relativePath);
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'resources', relativePath);
   }
   return path.join(__dirname, '..', 'resources', relativePath);
 }
