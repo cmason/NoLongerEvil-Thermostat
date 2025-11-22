@@ -108,21 +108,44 @@ export class ConvexService {
   }
 
   /**
-   * Get all state for a device
+   * Get all state for a specific device
    */
-  async getAllState(): Promise<DeviceStateStore> {
+  async getDeviceState(serial: string): Promise<Record<string, DeviceObject>> {
     const client = await this.getClient();
     if (!client) {
       return {};
     }
 
     try {
-      const result = await client.query('device:getAllState' as any);
-      return result?.deviceState || {};
+      const rows = await client.query('device:getDeviceState' as any, { serial });
+      if (!Array.isArray(rows)) {
+        return {};
+      }
+
+      const deviceState: Record<string, DeviceObject> = {};
+      for (const row of rows) {
+        deviceState[row.object_key] = {
+          object_key: row.object_key,
+          object_revision: row.object_revision,
+          object_timestamp: row.object_timestamp,
+          value: row.value,
+          updatedAt: row.updatedAt,
+        };
+      }
+      return deviceState;
     } catch (error) {
-      console.error('[Convex] Failed to get all state:', error);
+      console.error(`[Convex] Failed to get state for device ${serial}:`, error);
       return {};
     }
+  }
+
+  /**
+   * @deprecated Use getDeviceState instead
+   * Get all state for all devices (not recommended, no access control)
+   */
+  async getAllState(): Promise<DeviceStateStore> {
+    console.warn('[ConvexService] getAllState is deprecated and returns empty data');
+    return {};
   }
 
   /**

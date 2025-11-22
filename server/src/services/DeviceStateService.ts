@@ -57,9 +57,13 @@ export class DeviceStateService {
       return this.cache[serial];
     }
 
-    const allState = await this.convex.getAllState();
+    // Load all state for this specific device from Convex
+    const deviceState = await this.convex.getDeviceState(serial);
 
-    this.cache = { ...this.cache, ...allState };
+    // Cache the loaded state
+    if (Object.keys(deviceState).length > 0) {
+      this.cache[serial] = deviceState;
+    }
 
     return this.cache[serial] || {};
   }
@@ -143,18 +147,18 @@ export class DeviceStateService {
    * Used when device first connects
    */
   async hydrateFromConvex(serial: string): Promise<void> {
-    const allState = await this.convex.getAllState();
+    const deviceState = await this.convex.getDeviceState(serial);
 
-    if (allState[serial]) {
-      for (const [key, obj] of Object.entries(allState[serial])) {
+    if (Object.keys(deviceState).length > 0) {
+      for (const [key, obj] of Object.entries(deviceState)) {
         if (!obj.object_key) {
           console.log(`[DeviceStateService] WARNING: Object at key ${key} missing object_key field, adding it`);
           obj.object_key = key;
         }
       }
 
-      this.cache[serial] = allState[serial];
-      console.log(`[DeviceStateService] Hydrated ${Object.keys(allState[serial]).length} objects for ${serial}`);
+      this.cache[serial] = deviceState;
+      console.log(`[DeviceStateService] Hydrated ${Object.keys(deviceState).length} objects for ${serial}`);
     }
   }
 

@@ -13,6 +13,7 @@ export interface DeviceObject {
   object_revision: number;
   object_timestamp: number;
   value: Record<string, any>;
+  updatedAt?: number;
 }
 
 /**

@@ -153,58 +153,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get owned devices
-    const ownedDevices = await listConvexUserDevices(userId);
-    const ownedSerials = ownedDevices
-      .map((record) => record?.serial)
-      .filter((serial): serial is string => Boolean(serial));
+    // Fetch device state from Convex (includes owned + shared devices + state)
+    const convexData = await fetchConvexState(userId);
 
-    // Get shared devices
-    const convexClient = await getConvexClient();
-    const sharedDevices = convexClient
-      ? await convexClient.query('shares:getSharedWithMe' as any, { userId })
-      : [];
-    const sharedSerials = sharedDevices.map((share: any) => share.serial);
+    if (!convexData || !convexData.devices || convexData.devices.length === 0) {
+      // Fallback to backend if Convex has no data
+      const ownedDevices = await listConvexUserDevices(userId);
+      const serials = ownedDevices
+        .map((record) => record?.serial)
+        .filter((serial): serial is string => Boolean(serial));
 
-    // Combine
-    let serials = [...new Set([...ownedSerials, ...sharedSerials])];
+      if (serials.length === 0) {
+        return NextResponse.json(emptyState());
+      }
 
-    // Store share metadata for enrichment later
-    const shareMetadata: Record<string, { isOwner: boolean; sharedBy?: string; permissions?: string[] }> = {};
+      const fallback = await fetchBackendState(serials);
+      const fallbackWithWeather = await injectWeatherData(fallback);
+      return NextResponse.json(fallbackWithWeather);
+    }
 
-    ownedSerials.forEach(serial => {
-      shareMetadata[serial] = { isOwner: true };
-    });
-
-    sharedDevices.forEach((share: any) => {
-      shareMetadata[share.serial] = {
-        isOwner: false,
-        sharedBy: share.ownerEmail,
-        permissions: share.permissions,
-      };
-    });
-
+    // If specific serial requested, filter for it
+    let serials = convexData.devices;
     if (serializedParam) {
-      serials = serials.filter((serial) => serial === serializedParam);
+      serials = serials.filter((serial: string) => serial === serializedParam);
       if (serials.length === 0) {
         return NextResponse.json(emptyState(), { status: 403 });
       }
     }
 
-    if (serials.length === 0) {
-      return NextResponse.json(emptyState());
-    }
-
-    const convexData = await fetchConvexState(userId);
-    if (convexData) {
-      const filteredData = filterStateBySerials(convexData, serials);
-      const withWeather = await injectWeatherData(filteredData);
-      return NextResponse.json(withWeather);
-    }
-
-    const fallback = await fetchBackendState(serials);
-    const fallbackWithWeather = await injectWeatherData(fallback);
-    return NextResponse.json(fallbackWithWeather);
+    const filteredData = filterStateBySerials(convexData, serials);
+    const withWeather = await injectWeatherData(filteredData);
+    return NextResponse.json(withWeather);
   } catch (error) {
     console.error('[API] Failed to fetch status:', error);
     return NextResponse.json(
@@ -215,18 +194,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-async function getConvexClient() {
-  const CONVEX_URL = process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
-  const CONVEX_ADMIN_KEY = process.env.CONVEX_ADMIN_KEY;
-
-  if (!CONVEX_URL) return null;
-
-  const { ConvexHttpClient } = await import("convex/browser");
-  const client = new ConvexHttpClient(CONVEX_URL);
-  if (CONVEX_ADMIN_KEY) {
-    (client as any).setAdminAuth(CONVEX_ADMIN_KEY);
-  }
-  return client;
 }
