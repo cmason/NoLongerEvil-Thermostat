@@ -50,6 +50,9 @@ export const environment: EnvironmentConfig = {
   CONVEX_URL: getEnvNullable('CONVEX_URL') || getEnvNullable('NEXT_PUBLIC_CONVEX_URL'),
   CONVEX_ADMIN_KEY: getEnvNullable('CONVEX_ADMIN_KEY'),
 
+  SQLITE3_ENABLED: getEnvBoolean('SQLITE_ENABLED', true),
+  SQLITE3_DB_PATH: getEnvString('SQLITE3_DB_PATH', './data/database.sqlite'),
+
   API_ORIGIN: getEnvString('API_ORIGIN', 'https://backdoor.nolongerevil.com'),
   PROXY_PORT: getEnvInt('PROXY_PORT', 443),
   CONTROL_PORT: getEnvInt('CONTROL_PORT', 8081),

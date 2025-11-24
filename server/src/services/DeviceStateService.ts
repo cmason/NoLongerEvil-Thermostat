@@ -9,16 +9,16 @@
  */
 
 import type { DeviceObject, DeviceStateStore, DeviceOwner } from '../lib/types';
-import { ConvexService } from './ConvexService';
 import type { IntegrationManager } from '../integrations/IntegrationManager';
+import { AbstractDeviceStateManager } from './AbstractDeviceStateManager';
 
 export class DeviceStateService {
   private cache: DeviceStateStore = {};
-  private convex: ConvexService;
+  private deviceStateManager: AbstractDeviceStateManager;
   private integrationManager: IntegrationManager | null = null;
 
-  constructor(convex: ConvexService) {
-    this.convex = convex;
+  constructor(deviceStateManager: AbstractDeviceStateManager) {
+    this.deviceStateManager = deviceStateManager;
   }
 
   /**
@@ -39,10 +39,10 @@ export class DeviceStateService {
       return this.cache[serial][objectKey];
     }
 
-    const convexObject = await this.convex.getState(serial, objectKey);
-    if (convexObject) {
-      this.cacheObject(serial, convexObject);
-      return convexObject;
+    const dbObject = await this.deviceStateManager.getState(serial, objectKey);
+    if (dbObject) {
+      this.cacheObject(serial, dbObject);
+      return dbObject;
     }
 
     return null;
@@ -58,7 +58,7 @@ export class DeviceStateService {
     }
 
     // Load all state for this specific device from Convex
-    const deviceState = await this.convex.getDeviceState(serial);
+    const deviceState = await this.deviceStateManager.getDeviceState(serial);
 
     // Cache the loaded state
     if (Object.keys(deviceState).length > 0) {
@@ -83,15 +83,17 @@ export class DeviceStateService {
     value: Record<string, any>
   ): Promise<DeviceObject> {
     const deviceObject: DeviceObject = {
+      serial: serial,
       object_key: objectKey,
       object_revision: revision,
       object_timestamp: timestamp,
       value,
+      updatedAt: Date.now()
     };
 
     this.cacheObject(serial, deviceObject);
 
-    this.convex.upsertState(serial, objectKey, revision, timestamp, value).catch(error => {
+    this.deviceStateManager.upsertState(serial, objectKey, revision, timestamp, value).catch(error => {
       console.error(`[DeviceStateService] Failed to persist ${serial}/${objectKey} to Convex:`, error);
     });
 
@@ -147,7 +149,7 @@ export class DeviceStateService {
    * Used when device first connects
    */
   async hydrateFromConvex(serial: string): Promise<void> {
-    const deviceState = await this.convex.getDeviceState(serial);
+    const deviceState = await this.deviceStateManager.getDeviceState(serial);
 
     if (Object.keys(deviceState).length > 0) {
       for (const [key, obj] of Object.entries(deviceState)) {
@@ -195,7 +197,7 @@ export class DeviceStateService {
   }
 
   async getDeviceOwner(serial: string): Promise<DeviceOwner | null> {
-    return this.convex.getDeviceOwner(serial);
+    return this.deviceStateManager.getDeviceOwner(serial);
   }
 
   private cacheObject(serial: string, obj: DeviceObject): void {

@@ -4,8 +4,8 @@
  */
 
 import { IncomingMessage, ServerResponse } from 'http';
-import { ConvexService } from '../../services/ConvexService';
 import { environment } from '../../config/environment';
+import { AbstractDeviceStateManager } from '@/services/AbstractDeviceStateManager';
 
 /**
  * Handle GET /nest/passphrase
@@ -15,11 +15,11 @@ export async function handlePassphrase(
   _req: IncomingMessage,
   res: ServerResponse,
   serial: string,
-  convex: ConvexService
+  deviceStateManager: AbstractDeviceStateManager
 ): Promise<void> {
   const ttl = environment.ENTRY_KEY_TTL_SECONDS;
 
-  const convexKey = await convex.generateEntryKey(serial, ttl);
+  const convexKey = await deviceStateManager.generateEntryKey(serial, ttl);
 
   if (!convexKey) {
     console.error(`[Passphrase] Failed to generate entry key for ${serial} - Convex unavailable`);

@@ -1,13 +1,12 @@
-FROM node:24.11.1
+FROM node:24-alpine
 
-WORKDIR /app
+WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm install
-COPY server/. .
+COPY server/dist .
 
 WORKDIR /app
-COPY entrypoint.sh .
 
 EXPOSE 80 443 8081
 
-CMD ["/bin/sh", "/app/entrypoint.sh"]
+CMD ["node", "server/index.js"]
