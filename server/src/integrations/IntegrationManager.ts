@@ -30,7 +30,7 @@ export class IntegrationManager {
     console.log('[IntegrationManager] Initializing...');
 
     try {
-      // Load all enabled MQTT integrations from Convex
+      // Load all enabled MQTT integrations from device state manager
       const mqttIntegrations = await this.deviceStateManager.getAllEnabledMqttIntegrations();
 
       console.log(`[IntegrationManager] Found ${mqttIntegrations.length} enabled MQTT integrations`);

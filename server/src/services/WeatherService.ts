@@ -2,7 +2,7 @@
  * WeatherService
  *
  * Handles weather data caching and proxying to weather.nest.com
- * Implements 10-minute cache in Convex to reduce external API calls
+ * Implements 10-minute cache in device state manager to reduce external API calls
  */
 
 import * as https from 'https';
@@ -74,7 +74,7 @@ export class WeatherService {
   }
 
   /**
-   * Get cached weather from Convex
+   * Get cached weather from device state manager
    */
   private async getCachedWeather(
     postalCode: string,
@@ -96,7 +96,7 @@ export class WeatherService {
   }
 
   /**
-   * Cache weather data in Convex
+   * Cache weather data in device state manager
    */
   private async cacheWeather(
     postalCode: string,

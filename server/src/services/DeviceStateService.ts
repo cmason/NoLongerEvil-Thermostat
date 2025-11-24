@@ -1,7 +1,7 @@
 /**
  * DeviceStateService
  *
- * Replaces global.nestDeviceState with a proper service that treats Convex as source of truth.
+ * Replaces global.nestDeviceState with a proper service that treats device state manager as source of truth.
  * In-memory cache is used only for:
  * - Low-latency reads
  * - Quick merge operations
@@ -31,8 +31,8 @@ export class DeviceStateService {
   /**
    * Get a single object for a device
    * - Checks memory cache first
-   * - Falls back to Convex if not in cache
-   * - Updates cache on Convex hit
+   * - Falls back to device state manager if not in cache
+   * - Updates cache on device state manager hit
    */
   async get(serial: string, objectKey: string): Promise<DeviceObject | null> {
     if (this.cache[serial]?.[objectKey]) {
@@ -50,14 +50,14 @@ export class DeviceStateService {
 
   /**
    * Get all objects for a device
-   * Returns cached objects if available, otherwise loads from Convex
+   * Returns cached objects if available, otherwise loads from device state manager
    */
   async getAllForDevice(serial: string): Promise<Record<string, DeviceObject>> {
     if (this.cache[serial] && Object.keys(this.cache[serial]).length > 0) {
       return this.cache[serial];
     }
 
-    // Load all state for this specific device from Convex
+    // Load all state for this specific device from device state manager
     const deviceState = await this.deviceStateManager.getDeviceState(serial);
 
     // Cache the loaded state
@@ -71,7 +71,7 @@ export class DeviceStateService {
   /**
    * Upsert an object (from device or control command)
    * - Updates memory cache immediately
-   * - Persists to Convex asynchronously
+   * - Persists to device state manager asynchronously
    * - Notifies integrations of state change
    * - Returns the updated object
    */
@@ -94,7 +94,7 @@ export class DeviceStateService {
     this.cacheObject(serial, deviceObject);
 
     this.deviceStateManager.upsertState(serial, objectKey, revision, timestamp, value).catch(error => {
-      console.error(`[DeviceStateService] Failed to persist ${serial}/${objectKey} to Convex:`, error);
+      console.error(`[DeviceStateService] Failed to persist ${serial}/${objectKey} to device state manager:`, error);
     });
 
     if (this.integrationManager) {
@@ -145,10 +145,10 @@ export class DeviceStateService {
   }
 
   /**
-   * Hydrate cache from Convex for a specific device
+   * Hydrate cache from device state manager for a specific device
    * Used when device first connects
    */
-  async hydrateFromConvex(serial: string): Promise<void> {
+  async hydrateFromDeviceStatemanager(serial: string): Promise<void> {
     const deviceState = await this.deviceStateManager.getDeviceState(serial);
 
     if (Object.keys(deviceState).length > 0) {
@@ -166,7 +166,7 @@ export class DeviceStateService {
 
   /**
    * Invalidate cache for a device
-   * Forces next read to come from Convex
+   * Forces next read to come from device state manager
    */
   invalidate(serial: string): void {
     delete this.cache[serial];

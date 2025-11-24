@@ -47,9 +47,6 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
  * Validated environment configuration
  */
 export const environment: EnvironmentConfig = {
-  CONVEX_URL: getEnvNullable('CONVEX_URL') || getEnvNullable('NEXT_PUBLIC_CONVEX_URL'),
-  CONVEX_ADMIN_KEY: getEnvNullable('CONVEX_ADMIN_KEY'),
-
   SQLITE3_ENABLED: getEnvBoolean('SQLITE_ENABLED', true),
   SQLITE3_DB_PATH: getEnvString('SQLITE3_DB_PATH', './data/database.sqlite'),
 
@@ -75,12 +72,12 @@ export function validateEnvironment(): void {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  if (!environment.CONVEX_URL) {
-    warnings.push('CONVEX_URL not configured - state will not persist');
-  }
-
-  if (!environment.CONVEX_ADMIN_KEY) {
-    warnings.push('CONVEX_ADMIN_KEY not configured - some operations may fail');
+  if (environment.SQLITE3_ENABLED){
+    console.log('[Config] SQLite3 storage enabled');
+    if (!environment.SQLITE3_DB_PATH) {
+     errors.push('SQLITE3_DB_PATH will use the default path. ./data/database.sqlite');
+     environment.SQLITE3_DB_PATH = './data/database.sqlite';
+    }
   }
 
   if (environment.PROXY_PORT < 1 || environment.PROXY_PORT > 65535) {
@@ -103,7 +100,10 @@ export function validateEnvironment(): void {
   console.log(`[Config] API Origin: ${environment.API_ORIGIN}`);
   console.log(`[Config] Proxy Port: ${environment.PROXY_PORT}`);
   console.log(`[Config] Control Port: ${environment.CONTROL_PORT}`);
-  console.log(`[Config] Convex: ${environment.CONVEX_URL ? 'Configured' : 'Not configured'}`);
+  console.log(`[Config] State manager: ${environment.SQLITE3_ENABLED ? 'SQLite3' : 'Default SQLite3'}`);
+  if (environment.SQLITE3_ENABLED) {
+    console.log(`[Config] SQLite3 DB Path: ${environment.SQLITE3_DB_PATH}`);
+  }
   console.log(`[Config] TLS Certificates: ${environment.CERT_DIR || 'Not configured (HTTP only)'}`);
   console.log(`[Config] Debug Logging: ${environment.DEBUG_LOGGING ? 'Enabled' : 'Disabled'}`);
 }

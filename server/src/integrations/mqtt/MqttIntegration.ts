@@ -91,7 +91,7 @@ export class MqttIntegration extends BaseIntegration {
   }
 
   /**
-   * Load user's devices from Convex
+   * Load user's devices from device state manager
    */
   private async loadUserDevices(): Promise<void> {
     try {

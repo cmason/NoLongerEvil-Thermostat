@@ -123,8 +123,6 @@ export interface CommandResponse {
  * Environment Configuration
  */
 export interface EnvironmentConfig {
-  CONVEX_URL: string | null;
-  CONVEX_ADMIN_KEY: string | null;
   SQLITE3_ENABLED: boolean | null;
   SQLITE3_DB_PATH: string | null;
   API_ORIGIN: string;

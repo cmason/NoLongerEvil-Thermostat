@@ -53,7 +53,7 @@ export async function validateApiKey(
     return null;
   }
 
-  // Validate key via Convex
+  // Validate key via device state manager
   const context = await deviceStateManager.validateApiKey(key);
 
   if (!context) {
@@ -91,7 +91,7 @@ export async function checkDevicePermission(
   requiredScopes: string[],
   deviceStateManager: AbstractDeviceStateManager
 ): Promise<boolean> {
-  // Check permission via Convex (validates ownership + shares)
+  // Check permission via device state manager (validates ownership + shares)
   const hasPermission = await deviceStateManager.checkApiKeyPermission(
     context.userId,
     serial,

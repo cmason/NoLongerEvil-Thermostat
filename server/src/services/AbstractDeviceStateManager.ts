@@ -1,7 +1,7 @@
 /**
  * AbstractDeviceStateManager
  * Abstract base class for managing device states in different store solutions.
- * Currently, Convex is used as the primary store.
+ * Currently, SQLite is used as the primary store.
  * Provides type-safe methods and error handling for store interactions
  */
 
