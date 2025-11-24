@@ -392,7 +392,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
         });
       });
     } catch (err) {
-      console.error('[SQLite] Failed to get all state for a device: ', err);
+      console.error(`[SQLite] Failed to get all state for a device ${serial}|${object_key}: `, err);
       return {};
     }
   }
@@ -529,6 +529,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     if (!db){ return null; }
 
     try {
+      userId = userId.replace(/^user_/, "");
       const sql = `SELECT userId, serial, createdAt FROM deviceOwners where userId = ?`;
       return new Promise<DeviceOwner[]>((resolve, reject) => {
         db.all<DeviceOwner>(sql, [userId], (err, rows) => {
@@ -548,7 +549,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
         });
       });
     } catch (err) {
-      console.error('[SQLite3] Failed to get all devices for owner: ', err);
+      console.error(`[SQLite3] Failed to get all devices for owner ${userId}: `, err);
       return null;
     }
   }
@@ -851,7 +852,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
         })
       });
     } catch (err) {
-      console.error(`[SQLite3] Failed to get weather for zip/country: `, err);
+      console.error(`[SQLite3] Failed to get weather for ${postalCode}/${country}: `, err);
       return null;
     }
   }
@@ -885,7 +886,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
         });
       }
     } catch (error) {
-      console.error(`[SQLite3] Failed to upsert weather for ${postalCode}, ${country}:`, error);
+      console.error(`[SQLite3] Failed to upsert weather for ${postalCode}/${country}:`, error);
     }
   }
 
@@ -1083,7 +1084,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       }
       return false;
     } catch (error) {
-      console.error('[SQLite3] Failed to check API key permission:', error);
+      console.error(`[SQLite3] Failed to check API key permission for ${userId}:`, error);
       return false;
     }
   }
@@ -1115,7 +1116,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       const devices = null; //await db.query('users:listUserDevices' as any, { userId });
       return devices || [];
     } catch (error) {
-      console.error('[SQLite3] Failed to list user devices:', error);
+      console.error(`[SQLite3] Failed to list of devices for ${userId}:`, error);
       return [];
     }
   }
@@ -1146,7 +1147,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       })
       return null;
     } catch (err) {
-      console.error('[SQLite3] Failed to get device shared with user.', err);
+      console.error(`[SQLite3] Failed to get device shared with user ${userId}:`, err);
       return null;
     }
   }
@@ -1181,7 +1182,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
         });
       });
     } catch (error) {
-      console.error('[SQLite3] Failed to get shared devices:', error);
+      console.error(`[SQLite3] Failed to get devices shared with ${userId}:`, error);
       return [];
     }
   }
