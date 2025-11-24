@@ -9,10 +9,9 @@ services:
       - 443:443
       - 8081:8081
     volumes:
-      # If you want to selfhost, make sure to create your own env.local file. 
-      # You can use the .env.example as a starting point. Then uncomment the
-      # below volume map.
-      #- ./env.local:/app/.env.local
+      # Make sure to create your own env.local file. 
+      # You can use the .env.example as a starting point.
+      - ./env.local:/app/.env.local
       - nolongerevil-data:/app/data
 
 volumes:
