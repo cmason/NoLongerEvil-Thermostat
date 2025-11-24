@@ -3,7 +3,8 @@
  * Centralized wrapper for all SQLite3 database operations
  * Provides type-safe methods and error handling for interactions
  */
-import { Database } from 'sqlite3';
+import { open, Database } from 'sqlite';
+import sqlite3 from 'sqlite3';
 import type {
   DeviceObject,
   DeviceOwner,
@@ -16,7 +17,6 @@ import type {
   UserState,
   DialogState,
   APIKey,
-  APIKeyPermissions,
   DeviceSharedWith,
 } from '../lib/types';
 import { environment } from '../config/environment';
@@ -133,16 +133,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     ];
 
     for (const stmt of schemaStatements) {
-      await new Promise<void>((resolve, reject) => {
-        db.run(stmt, (err) => {
-          if (err) {
-            console.error(err.message);
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      await db.run(stmt);
     }
 
     console.log('[SQLite3] Database schema created or already exists.');
@@ -172,14 +163,10 @@ export class SQLite3Service extends AbstractDeviceStateManager {
           console.error('[SQLite3] Failed to create folder for sqlite.', error);
         }
         
-        const db = await new Promise<Database>((resolve, reject) => {
-          const db = new Database(SQLITE3_DB_PATH, (err) => {
-            if (err) {
-                reject(err);
-            }
-          });
-          resolve(db);
-        });
+        const db = await open({
+          filename: SQLITE3_DB_PATH,
+          driver: sqlite3.Database
+        })
 
         await this.createSchema(db);
 
@@ -215,21 +202,13 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       const currentState = await this.getState(serial, objectKey);
       if (currentState) {
         const mergedValue = await this.mergeValues(currentState.value ?? {}, value ?? {});
-        db.run(`UPDATE states SET object_revision = ?, object_timestamp = ?, value = ?, updatedAt = ?
+        await db.run(`UPDATE states SET object_revision = ?, object_timestamp = ?, value = ?, updatedAt = ?
           WHERE serial = ? and object_key = ?`,
-          [revision, timestamp, JSON.stringify(mergedValue), Date.now(), serial, objectKey] ,(err) => {
-            if (err) {
-              throw err;
-            }
-          });
+          [revision, timestamp, JSON.stringify(mergedValue), Date.now(), serial, objectKey]);
       } else {
-        db.run(`INSERT INTO states (serial, object_key, object_revision, 
+        await db.run(`INSERT INTO states (serial, object_key, object_revision, 
           object_timestamp, value, updatedAt) VALUES (?, ?, ?, ?, ?, ?)`,
-          [serial, objectKey, revision, timestamp, JSON.stringify(value), Date.now()], (err) => {
-          if (err) {
-            throw err;
-          }
-        });
+          [serial, objectKey, revision, timestamp, JSON.stringify(value), Date.now()]);
       }
     } catch (error) {
       console.error(`[SQLite3] Failed to upsert state for ${serial}/${objectKey}:`, error);
@@ -247,30 +226,18 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     }
 
     try {
-      const sql = `SELECT object_key, object_revision, 
-        object_timestamp, value as db_value FROM states 
-        WHERE serial = ? AND object_key = ?`
-      return new Promise((resolve, reject) => {
-        db.get<DeviceObject>(sql, [serial, objectKey], (err, row) => {
-          if (err) {
-            reject(err);
-          }
-          if (row) {
-            const parsedObject: any = JSON.parse(row.db_value);
-            const ret: DeviceObject = {
-              serial: row.serial,
-              object_key: row.object_key,
-              object_revision: row.object_revision,
-              object_timestamp: row.object_timestamp,
-              value: parsedObject as Record<string, any>,
-              updatedAt: row.updatedAt
-            }
-            resolve(ret);
-          } else {
-            resolve(null);
-          }
-        });
-      });
+      const sql = `SELECT object_key, object_revision, object_timestamp, value as db_value
+        FROM states WHERE serial = ? AND object_key = ?`
+      const row = await db.get<DeviceObject>(sql, [serial, objectKey]);
+
+      return row ? {
+        serial: row.serial,
+        object_key: row.object_key,
+        object_revision: row.object_revision,
+        object_timestamp: row.object_timestamp,
+        value: JSON.parse(row.db_value),
+        updatedAt: row.updatedAt
+      } : null;
     } catch (error) {
       console.error(`[SQLite3] Failed to get state for ${serial}/${objectKey}:`, error);
       return null;
@@ -287,26 +254,24 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     try {
       const sql = `SELECT serial, object_key, object_revision, object_timestamp, value as db_value,
         updatedAt FROM states WHERE serial = ?`;
-      return new Promise<Record<string, DeviceObject>>((resolve, reject) => {
-        db.all<DeviceObject>(sql, [serial], (err, rows) => {
-          if (err) { reject(err); }
-          if (rows) {
-            const deviceState: Record<string, DeviceObject> = {};
-            for (const row of rows) {
-              const parsedObject: any = JSON.parse(row.db_value);
-              deviceState[row.object_key] = {
-                serial: serial,
-                object_key: row.object_key,
-                object_revision: row.object_revision,
-                object_timestamp: row.object_timestamp,
-                value: parsedObject as Record<string, any>,
-                updatedAt: row.updatedAt
-              };
-            }
-            resolve(deviceState);
+      const rows = await db.all<DeviceObject[]>(sql, [serial]);
+
+      if (rows) {
+        const deviceState: Record<string, DeviceObject> = {};
+        for (const row of rows) {
+          deviceState[row.object_key] = {
+            serial: serial,
+            object_key: row.object_key,
+            object_revision: row.object_revision,
+            object_timestamp: row.object_timestamp,
+            value: JSON.parse(row.db_value),
+            updatedAt: row.updatedAt
           }
-        });
-      });
+        }
+        return deviceState;
+      } else {
+        return {};
+      }
     } catch (error) {
       console.error(`[SQLite3] Failed to get state for device ${serial}: `, error);
       return {};
@@ -326,31 +291,27 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     try {
       const sql = `SELECT serial, object_key, object_revision,
         object_timestamp, value as db_value, updatedAt FROM states`;
-      return new Promise<DeviceStateStore>((resolve, reject) => {
-        db.all<DeviceObject>(sql, (err, rows) => {
-          if (err) {
-            reject(err);
+
+      const rows = await db.all<DeviceObject[]>(sql);
+
+      const deviceState: Record<string, Record<string, any>> = {};
+      if (rows) {
+        const devices = new Set<string>();
+        for (const row of rows) {
+          const serial = row.serial;
+          devices.add(serial);
+          const bucket = (deviceState[serial] ||= {});
+          bucket[row.object_key] = {
+            object_key: row.object_key,
+            object_revision: row.object_revision,
+            object_timestamp: row.object_timestamp,
+            value: JSON.parse(row.db_value),
+            updatedAt: row.updatedAt
           }
-          const deviceState: Record<string, Record<string, any>> = {};
-          if (rows) {
-            const devices = new Set<string>();
-            for (const row of rows) {
-              const serial = row.serial;
-              devices.add(serial);
-              const bucket = (deviceState[serial] ||= {});
-              const parsedObject: any = JSON.parse(row.db_value);
-              bucket[row.object_key] = {
-                object_key: row.object_key,
-                object_revision: row.object_revision,
-                object_timestamp: row.object_timestamp,
-                value: parsedObject as Record<string, any>,
-                updatedAt: row.updatedAt
-              }
-            }
-          }
-          resolve(deviceState);
-        });
-      });
+        }
+      }
+
+      return deviceState;
     } catch (error) {
       console.error('[SQLite3] Failed to get all state: ', error);
       return {};
@@ -368,29 +329,26 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       const sql = `SELECT serial, object_key, object_revision,
         object_timestamp, value as db_value, updatedAt FROM states
         WHERE serial = ? and object_key = ?`;
-      return new Promise<DeviceStateStore>((resolve, reject) => {
-        db.all<DeviceObject>(sql, [serial, object_key], (err, rows) => {
-          if (err) { reject(err); }
-          const deviceState: Record<string, Record<string, any>> = {};
-          if (rows) {
-            const devices = new Set<string>();
-            for (const row of rows) {
-              const serial = row.serial;
-              devices.add(serial);
-              const bucket = (deviceState[serial] ||= {});
-              const parsedObject: any = JSON.parse(row.db_value);
-              bucket[row.object_key] = {
-                object_key: row.object_key,
-                object_revision: row.object_revision,
-                object_timestamp: row.object_timestamp,
-                value: parsedObject as Record<string, any>,
-                updatedAt: row.updatedAt
-              }
-            }
+      const rows = await db.all<DeviceObject[]>(sql, [serial, object_key]);
+
+      const deviceState: Record<string, Record<string, any>> = {};
+      if (rows) {
+        const devices = new Set<string>();
+        for (const row of rows) {
+          const serial = row.serial;
+          devices.add(serial);
+          const bucket = (deviceState[serial] ||= {});
+          bucket[row.object_key] = {
+            object_key: row.object_key,
+            object_revision: row.object_revision,
+            object_timestamp: row.object_timestamp,
+            value: JSON.parse(row.db_value),
+            updatedAt: row.updatedAt
           }
-          resolve(deviceState);
-        });
-      });
+        }
+      }
+
+      return deviceState
     } catch (err) {
       console.error(`[SQLite] Failed to get all state for a device ${serial}|${object_key}: `, err);
       return {};
@@ -413,11 +371,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
       // Delete all existing entry keys for this serial (both expired and active)
       const sql = `DELETE FROM entryKeys WHERE serial = ?`;
-      db.run(sql, [serial], (err) => {
-        if (err) {
-          console.error(err.message);
-        }
-      });
+      await db.run(sql, [serial]);
 
       let attempts = 0;
       let codeDoc: any = null;
@@ -435,23 +389,17 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
         const sql2 = `SELECT code as value, expiresAt as expires, claimedBy
           FROM entryKeys where code = ?`
-        const codeDoc = await new Promise<EntryKey | null>((resolve, reject) => {
-          db.get<EntryKey>(sql2, [code], (err, row) => {
-            if (err) {
-              reject(err);
-            }
-            if (row) {
-              const ret: EntryKey = {
-                value: row.value,
-                expires: row.expires,
-                claimedBy: row.claimedBy
-              }
-              resolve(ret);
-            } else {
-              resolve(null);
-            }
-          });
-        });
+        const row = await db.get<EntryKey>(sql2, [code]);
+
+        let codeDoc = null;
+        if (row) {
+          const ret: EntryKey = {
+            value: row.value,
+            expires: row.expires,
+            claimedBy: row.claimedBy
+          }
+          codeDoc = ret;
+        }
 
         if (!codeDoc) break;
 
@@ -467,11 +415,11 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       }
 
       if (codeDoc) {
-        db.run(`UPDATE entryKeys SET serial = ?, createdAt = ?,
+        await db.run(`UPDATE entryKeys SET serial = ?, createdAt = ?,
           expiresAt = ?, claimedBy = null, claimedAt = null`, 
           [serial, nowMs, expiresAt]);
       } else {
-        db.run(`INSERT INTO entryKeys (code, serial, createdAt, expiresAt)
+        await db.run(`INSERT INTO entryKeys (code, serial, createdAt, expiresAt)
           VALUES (?, ?, ?, ?)`,
         [code, serial, nowMs, expiresAt]);
       }
@@ -498,23 +446,13 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
     try {
       const sql = `SELECT userId, serial, createdAt FROM deviceOwners WHERE serial = ?`;
-      return new Promise((resolve, reject) => {
-        db.get<DeviceOwner>(sql, [serial], (err, row) => {
-          if (err) {
-            reject(err);
-          }
-          if (row) {
-            const ret: DeviceOwner = {
-              userId: row.userId,
-              serial: row.serial,
-              createdAt: row.createdAt
-            }
-            resolve(ret);
-          } else {
-            resolve(null);
-          }
-        });
-      });
+      const row = await db.get<DeviceOwner>(sql, [serial]);
+
+      return row ? {
+        userId: row.userId,
+        serial: row.serial,
+        createdAt: row.createdAt
+      } : null;
     } catch (error) {
       console.error(`[SQLite3] Failed to get device owner for ${serial}:`, error);
       return null;
@@ -531,23 +469,19 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     try {
       userId = userId.replace(/^user_/, "");
       const sql = `SELECT userId, serial, createdAt FROM deviceOwners where userId = ?`;
-      return new Promise<DeviceOwner[]>((resolve, reject) => {
-        db.all<DeviceOwner>(sql, [userId], (err, rows) => {
-          if (err) { reject(err); }
-          if (rows) {
-            let devices: DeviceOwner[] = [];
-            for (const row of rows) {
-              const device: DeviceOwner = {
-                userId: row.userId,
-                serial: row.serial,
-                createdAt: row.createdAt
-              }
-              devices.push(device);
-            }
-            resolve(devices);
-          }
-        });
-      });
+      const rows = await db.all<DeviceOwner[]>(sql, [userId]);
+
+      let devices: DeviceOwner[] = [];
+      if (rows) {
+        for (const row of rows) {
+          devices.push ({
+            userId: row.userId,
+            serial: row.serial,
+            createdAt: row.createdAt
+          });
+        }
+      }
+      return devices;
     } catch (err) {
       console.error(`[SQLite3] Failed to get all devices for owner ${userId}: `, err);
       return null;
@@ -751,20 +685,13 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
     try {
       const sql = `SELECT clerkId, email, createdAt FROM users WHERE clerkId = ?`;
-      return new Promise((resolve, reject) => {
-        db.get<UserInfo>(sql, [clerkId], (err, row) => {
-          if (err) { reject(err); }
-          if (row) {
-            const ret: UserInfo = {
-              clerkId: row.clerkId,
-              email: row.email,
-              createdAt: row.createdAt
-            }
-            resolve(ret);
-          }
-          resolve(null);
-        });
-      });
+      const row = await db.get<UserInfo>(sql, [clerkId]);
+
+      return row ? {
+        clerkId: row.clerkId,
+        email: row.email,
+        createdAt: row.createdAt
+      } : null;
     } catch (err) {
       console.error(`[SQLite3] Failed to get user information for ${clerkId}`, err);
       return null;
@@ -834,23 +761,14 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     if (!db) { return null; }
 
     try {
-      const sql = `SELECT postalCode, country, fetchedAt, data as db_data FROM weather
+      const sql = `SELECT postalCode, country, fetchedAt, data FROM weather
         WHERE postalCode = ? AND country = ?`
-      return new Promise<StateWeatherCache | null>((resolve, reject) => {
-        db.get<WeatherData>(sql, [postalCode, country], (err, row) => {
-          if (err) { reject(err); }
-          if (row) {
-            const weatherData = String(row.db_data);
-            const weather = JSON.parse(weatherData);
-            const weatherCache: StateWeatherCache = {
-              data: weather,
-              fetchedAt: Number(row.fetchedAt)
-            }
-            resolve(weatherCache);
-          }
-          resolve(null);
-        })
-      });
+      const row = await db.get<StateWeatherCache>(sql, [postalCode, country]);
+
+      return row ? {
+        data: JSON.parse(String(row.data)),
+        fetchedAt: row.fetchedAt
+      } : null;
     } catch (err) {
       console.error(`[SQLite3] Failed to get weather for ${postalCode}/${country}: `, err);
       return null;
@@ -875,15 +793,11 @@ export class SQLite3Service extends AbstractDeviceStateManager {
       const currentWeather = await this.getWeather(postalCode, country);
       if (currentWeather) {
         const sql = `UPDATE weather SET fetchedAt = ?, data = ? WHERE postalCode = ? AND country = ?`;
-        db.run(sql, [fetchedAt, JSON.stringify(data), postalCode, country], (err) => {
-          if (err) { throw err; }
-        });
+        await db.run(sql, [fetchedAt, JSON.stringify(data), postalCode, country]);
       } else {
         const sql = `INSERT INTO weather (postalCode, country, fetchedAt, data)
           VALUES (?, ?, ?, ?)`;
-        db.run(sql, [postalCode, country, fetchedAt, JSON.stringify(data)], (err) => {
-          if (err) { throw err; }
-        });
+        await db.run(sql, [postalCode, country, fetchedAt, JSON.stringify(data)]);
       }
     } catch (error) {
       console.error(`[SQLite3] Failed to upsert weather for ${postalCode}/${country}:`, error);
@@ -950,32 +864,21 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     if (!db) { return null; }
 
     try {
-      const sql = `SELECT id, keyHash, keyPreview, userId, name, permissions as db_perms, createdAt, expiresAt, lastUsedAt 
-        FROM apiKeys WHERE keyHash = ?`;
-        return new Promise<any>((resolve, reject) => {
-          db.get<APIKey>(sql, [keyHash], (err, row) => {
-            if (err) { reject(err); }
-            if (row) {
-              let parsedPerms: any = null;
-              if (row.db_perms) {
-                parsedPerms = JSON.parse(row.db_perms);
-              }
-              const ret: APIKey = {
-                id: row.id,
-                keyHash: row.keyHash,
-                keyPreview: row.keyPreview,
-                userId: row.userId,
-                name: row.name,
-                permissions: parsedPerms as APIKeyPermissions,
-                createdAt: row.createdAt,
-                expiresAt: row.expiresAt,
-                lastUsedAt: row.lastUsedAt
-              }
-              resolve(ret);
-            }
-            return resolve(null);
-          });
-        })
+      const sql = `SELECT id, keyHash, keyPreview, userId, name, permissions, 
+        createdAt, expiresAt, lastUsedAt FROM apiKeys WHERE keyHash = ?`;
+      const row = await db.get<APIKey>(sql, [keyHash]);
+
+      return row ? {
+        id: row.id,
+        keyHash: row.keyHash,
+        keyPreview: row.keyPreview,
+        userId: row.userId,
+        name: row.name,
+        permissions: row.permissions,
+        createdAt: row.createdAt,
+        expiresAt: row.expiresAt,
+        lastUsedAt: row.lastUsedAt
+      } : null;
     } catch (err) {
       console.error('[SQLite3] Failed to fetch api key.', err);
       return null;
@@ -991,11 +894,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
     try {
       const sql = `UPDATE apiKeys SET lastUsedAt = ? where keyHash = ?`;
-      db.run(sql, [Date.now(), keyHash], (err) => {
-        if (err) {
-          console.error('[SQLite3] Faild to update last used for API key.');
-        }
-      })
+      await db.run(sql, [Date.now(), keyHash]);
     } catch (err) {
       console.error('[SQLite3] Failed to update last used for API key.');
       return;
@@ -1100,21 +999,16 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
     try {
       const sql = `SELECT userId, serial, createdAt FROM deviceOwners WHERE userId = ?`;
-      return new Promise<Array<{ serial: string }>>((resolve, reject) => {
-        db.all<DeviceOwner>(sql, [userId], (err, rows) => {
-          if (err) { reject(err); }
-          if (rows) {
-            let serials: Array<{ serial: string }> = [];
-            for (const row of rows) {
-              serials.push({ serial: row.serial});
-            }
-            resolve(serials);
-          }
-          resolve([]);
-        });
-      });
-      const devices = null; //await db.query('users:listUserDevices' as any, { userId });
-      return devices || [];
+      const rows = await db.all<DeviceOwner[]>(sql, [userId]);
+
+      let serials: Array<{ serial: string }> = [];
+      if (rows) {
+        for (const row of rows) {
+          serials.push({ serial: row.serial});
+        }
+      }
+
+      return serials;
     } catch (error) {
       console.error(`[SQLite3] Failed to list of devices for ${userId}:`, error);
       return [];
@@ -1129,23 +1023,14 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     if (!db) { return null ;}
 
     try {
-      const sql = `SELECT ownerId, sharedWithUserId, serial, 
-        permissions as db_perms, createdAt FROM deviceShares 
-        WHERE serial = ? AND sharedWithUserId = ?`;
-      return new Promise<{ serial: string; permissions: string[]; }>((resolve, reject) => {
-        db.get<DeviceSharedWith>(sql, [serial, userId], (err, row) => {
-          if (err) { reject(err); }
-          if (row) {
-            const dbPerms: any = JSON.parse(row.db_perms);
-            const ret = {
-              serial: row.serial,
-              permissions: dbPerms
-            }
-            resolve(ret);
-          }
-        });
-      })
-      return null;
+      const sql = `SELECT ownerId, sharedWithUserId, serial, permissions, createdAt 
+        FROM deviceShares WHERE serial = ? AND sharedWithUserId = ?`;
+      const row = await db.get<DeviceSharedWith>(sql, [serial, userId]);
+
+      return row ? {
+        serial: row.serial,
+        permissions: row.permissions.scopes
+      } : null;
     } catch (err) {
       console.error(`[SQLite3] Failed to get device shared with user ${userId}:`, err);
       return null;
@@ -1162,25 +1047,21 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     }
 
     try {
-      const sql = `SELECT ownerId, sharedWithUserId, serial, 
-        permissions as db_perms, createdAt FROM deviceShares 
-        WHERE sharedWithUserId = ?`;
-      return new Promise<Array<{ serial: string; permissions: string[] }>>((resolve, reject) => {
-        db.all<DeviceSharedWith>(sql, [userId], (err, rows) => {
-          if (err) { reject(err); }
-          if (rows) {
-            let devices: Array<{ serial: string; permissions: string[] }> = [];
-            
-            for (const row of rows) {
-              const dbPerms: any = JSON.parse(row.db_perms);
-              let userPerms = { serial: row.serial, permissions: dbPerms as string[] };
-              devices.push(userPerms);
-            }
-            resolve(devices);
-          }
-          resolve([]);
-        });
-      });
+      const sql = `SELECT ownerId, sharedWithUserId, serial, permissions, createdAt 
+        FROM deviceShares WHERE sharedWithUserId = ?`;
+      const rows = await db.all<DeviceSharedWith[]>(sql, [userId]);
+
+      let devices: Array<{ serial: string; permissions: string[] }> = [];
+      if (rows) {
+        for (const row of rows) {
+          devices.push({
+            serial: row.serial,
+            permissions: row.permissions.scopes
+          })
+        }
+      }
+
+      return devices;
     } catch (error) {
       console.error(`[SQLite3] Failed to get devices shared with ${userId}:`, error);
       return [];
