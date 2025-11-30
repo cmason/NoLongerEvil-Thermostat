@@ -33,6 +33,11 @@ export abstract class AbstractDeviceStateManager {
   ): Promise<void>;
 
   /**
+   * Get Device by ID
+   */
+  abstract getDeviceByID(serial: string): Promise<string | null>;
+  
+  /**
    * Get single device state object
    * @param serial 
    * @param objectKey 

@@ -23,6 +23,8 @@ import { logRequest, createResponseLogger, initDebugLogsDir } from './middleware
 import { IntegrationManager } from './integrations/IntegrationManager';
 import { AbstractDeviceStateManager } from './services/AbstractDeviceStateManager';
 import { SQLite3Service } from './services/SQLite3Service';
+import { DeviceInitialization } from './integrations/DeviceInitialization';
+
 validateEnvironment();
 
 initializeFileLogging();
@@ -33,6 +35,7 @@ const deviceStateService = new DeviceStateService(deviceStateManager);
 const subscriptionManager = new SubscriptionManager();
 const weatherService = new WeatherService(deviceStateManager);
 const integrationManager = new IntegrationManager();
+const deviceInitialization = new DeviceInitialization();
 
 /**
  * Parse JSON request body
@@ -314,6 +317,38 @@ function setupGracefulShutdown(): void {
   process.on('SIGINT', shutdown);
 }
 
+async function verifyDeviceSetup(): Promise<void> {
+  console.log('[DeviceInitialization] Verify Nest device(s) setup.')
+  
+  if (environment.NEST_DEVICES) {
+    const server_origin = environment.API_ORIGIN + '/entry';
+    for (const device of environment.NEST_DEVICES) {
+      console.log(`[DeviceInitialization] Checking device (${device.deviceId}).`);
+      const serial = await deviceStateManager.getDeviceByID(device.deviceId);
+      if (!serial) {
+        console.log(`[DeviceInitialization] Getting device (${device.deviceId}) endpoint url.`);
+        try {
+          const device_endpoint = await deviceInitialization.getDeviceEndpoint(device);
+          if (device_endpoint) {
+            if (device_endpoint == server_origin) {
+              console.log(`[DeviceInitialization] Device (${device.deviceId}) already setup.`);
+            } else {
+              console.log(`[DeviceInitialization] Device (${device.deviceId}) not setup to use this server. Updating...`);
+              await deviceInitialization.updateDeviceEndpoint(device, environment.API_ORIGIN);
+            }
+          }
+        } catch (error) {
+          console.error(`[DeviceInitialization] Failed to validate device (${device.deviceId}).`)
+        }
+      } else {
+        console.log(`[DeviceInitialization] Device (${device.deviceId}) exists in database. No setup needed.`);
+      }
+    }
+  } else {
+    console.log('[DeviceInitialization] No devices setup for initialization. Skip.');
+  }
+}
+
 console.log('='.repeat(60));
 console.log('NoLongerEvil Thermostat API Server (TypeScript)');
 console.log('='.repeat(60));
@@ -321,6 +356,8 @@ console.log('='.repeat(60));
 (async () => {
   await startServers();
   setupGracefulShutdown();
+
+  await verifyDeviceSetup();
 
   console.log('\n[Server] Initialization complete');
   console.log('[Server] Press Ctrl+C to stop\n');

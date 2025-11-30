@@ -135,6 +135,7 @@ export interface EnvironmentConfig {
   MAX_SUBSCRIPTIONS_PER_DEVICE: number;
   DEBUG_LOGGING: boolean;
   DEBUG_LOGS_DIR: string;
+  NEST_DEVICES: NestDeviceAPI[] | null;
 }
 
 /**
@@ -270,4 +271,22 @@ export interface DeviceSharedWith {
   permissions: APIKeyPermissions;
   db_perms: string;
   createdAt: number;
+}
+
+/**
+ * Nest Device API
+ */
+export interface NestDeviceAPI {
+  deviceIp: string;
+  deviceId: string;
+  credentials: string;
+}
+
+/**
+ * Nest Device API Response
+ */
+export interface NestDeviceSettings {
+  device_name: string;
+  status: string;
+  cloudregisterurl: string;
 }

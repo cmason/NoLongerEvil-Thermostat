@@ -183,6 +183,25 @@ export class SQLite3Service extends AbstractDeviceStateManager {
   }
 
   /**
+   * Get Device ID
+   */
+  async getDeviceByID(serial: string): Promise<string | null> {
+    const db = await this.getDb();
+    if (!db) {
+      return null;
+    }
+
+    try {
+      const sql = `SELECT DISTINCT serial FROM states WHERE serial = ?`;
+      const row = await db.get<DeviceObject>(sql, [serial]);
+      return row ? row.serial : null;
+    } catch (error) {
+      console.error(`[SQLite3] Failed to get state for ${serial}: `, error);
+      return null;
+    }
+  }
+
+  /**
    * Upsert device state object
    */
   async upsertState(

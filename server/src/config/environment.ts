@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import type { EnvironmentConfig } from '../lib/types';
+import type { EnvironmentConfig, NestDeviceAPI } from '../lib/types';
 
 if (fs.existsSync(path.resolve(process.cwd(), '.env.local'))) {
   console.log('[Config] Found .env.local file. Using this for environment setup.')
@@ -47,6 +47,22 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 }
 
 /**
+ * Get Nest Device(s)
+ */
+function getNestDevices(devices: string): NestDeviceAPI[] | null {
+  let nestDevicesApi: NestDeviceAPI[] = [];
+
+  if (devices) {
+    for (const device of devices.split(',')) {
+      const deviceInfo: string[] = device.split(':');
+      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1].substring(2), 'credentials':deviceInfo[2]});
+    }
+    return nestDevicesApi;
+  }
+  return null;
+}
+
+/**
  * Validated environment configuration
  */
 export const environment: EnvironmentConfig = {
@@ -67,6 +83,8 @@ export const environment: EnvironmentConfig = {
 
   SQLITE3_ENABLED: getEnvBoolean('SQLITE3_ENABLED', true),
   SQLITE3_DB_PATH: getEnvString('SQLITE3_DB_PATH', './data/database.sqlite'),
+
+  NEST_DEVICES: getNestDevices(getEnvString('NEST_DEVICES', '')),
 };
 
 /**
