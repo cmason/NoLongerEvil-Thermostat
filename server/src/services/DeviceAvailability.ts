@@ -7,10 +7,12 @@
  * Devices are considered "seen" when they:
  * - Hit /nest/entry
  * - Send a PUT request to /nest/transport/put
- * - Attempt a SUBSCRIBE to /nest/transport
+ * - Have an active SUBSCRIBE connection (long-polling)
  *
  * All devices start as UNAVAILABLE until first activity.
  */
+
+import { SubscriptionManager } from './SubscriptionManager';
 
 export interface DeviceAvailabilityState {
   serial: string;
@@ -21,18 +23,21 @@ export interface DeviceAvailabilityState {
 export class DeviceAvailabilityWatchdog {
   private deviceStates: Map<string, DeviceAvailabilityState> = new Map();
   private watchdogTimer: NodeJS.Timeout | null = null;
-  private readonly TIMEOUT_MS = 125000; // 125 seconds (120s + 5s buffer)
-  private readonly CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
+  private readonly TIMEOUT_MS = 300000; // 5 minutes (300 seconds)
+  private readonly CHECK_INTERVAL_MS = 30000; // Check every 30 seconds
   private onAvailabilityChange: ((serial: string, isAvailable: boolean) => void) | null = null;
+  private subscriptionManager: SubscriptionManager | null = null;
 
   /**
    * Start the watchdog timer
    */
-  start(): void {
+  start(subscriptionManager: SubscriptionManager): void {
     if (this.watchdogTimer) {
       console.warn('[DeviceAvailability] Watchdog already running');
       return;
     }
+
+    this.subscriptionManager = subscriptionManager;
 
     console.log(`[DeviceAvailability] Starting watchdog (timeout: ${this.TIMEOUT_MS}ms, check: ${this.CHECK_INTERVAL_MS}ms)`);
 
@@ -68,7 +73,7 @@ export class DeviceAvailabilityWatchdog {
 
     if (!existingState) {
       // First time seeing this device
-      console.log(`[DeviceAvailability] Device ${serial} first seen`);
+      console.log(`[${new Date().toISOString()}] [DeviceAvailability] Device ${serial} first seen`);
       this.deviceStates.set(serial, {
         serial,
         lastSeen: now,
@@ -84,7 +89,7 @@ export class DeviceAvailabilityWatchdog {
 
       if (!wasAvailable) {
         // Device came back online
-        console.log(`[DeviceAvailability] Device ${serial} came back online`);
+        console.log(`[${new Date().toISOString()}] [DeviceAvailability] Device ${serial} came back online`);
         existingState.isAvailable = true;
         this.notifyAvailabilityChange(serial, true);
       }
@@ -97,6 +102,35 @@ export class DeviceAvailabilityWatchdog {
   private checkDeviceTimeouts(): void {
     const now = Date.now();
 
+    // Also check devices with active subscriptions (keep them alive)
+    if (this.subscriptionManager) {
+      const activeSerials = this.subscriptionManager.getActiveSerials();
+      for (const serial of activeSerials) {
+        // Mark devices with active subscriptions as seen
+        const state = this.deviceStates.get(serial);
+        if (state) {
+          state.lastSeen = now; // Keep updating while subscription is active
+          
+          // If was unavailable, mark as available now
+          if (!state.isAvailable) {
+            console.log(`[${new Date().toISOString()}] [DeviceAvailability] Device ${serial} has active subscription, marking available`);
+            state.isAvailable = true;
+            this.notifyAvailabilityChange(serial, true);
+          }
+        } else {
+          // First time seeing this device via subscription
+          console.log(`[${new Date().toISOString()}] [DeviceAvailability] Device ${serial} first seen (active subscription)`);
+          this.deviceStates.set(serial, {
+            serial,
+            lastSeen: now,
+            isAvailable: true,
+          });
+          this.notifyAvailabilityChange(serial, true);
+        }
+      }
+    }
+
+    // Check for timeouts
     for (const [serial, state] of this.deviceStates.entries()) {
       if (!state.isAvailable) {
         // Already marked unavailable, skip
@@ -106,7 +140,7 @@ export class DeviceAvailabilityWatchdog {
       const timeSinceLastSeen = now - state.lastSeen;
 
       if (timeSinceLastSeen > this.TIMEOUT_MS) {
-        console.log(`[DeviceAvailability] Device ${serial} timed out (last seen ${Math.round(timeSinceLastSeen / 1000)}s ago)`);
+        console.log(`[${new Date().toISOString()}] [DeviceAvailability] Device ${serial} timed out (last seen ${Math.round(timeSinceLastSeen / 1000)}s ago)`);
         state.isAvailable = false;
         this.notifyAvailabilityChange(serial, false);
       }

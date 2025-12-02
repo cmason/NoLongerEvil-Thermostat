@@ -155,13 +155,13 @@ async function handleDeviceRequest(req: http.IncomingMessage, res: http.ServerRe
       if (environment.DEBUG_LOGGING) {
         logRequest(req, body);
       }
-      // Mark device as seen (availability heartbeat)
-      availabilityWatchdog.markSeen(serial);
+      // Note: Device availability is tracked via active subscriptions in SubscriptionManager
       await handleTransportSubscribe(req, res, serial, body, deviceStateService, subscriptionManager, deviceStateManager);
       return;
     }
 
     if (pathname.includes('/put') && method === 'POST') {
+      console.log(`[${new Date().toISOString()}] [Device API] Received PUT from ${serial}`);
       const body = await parseJsonBody(req);
       if (environment.DEBUG_LOGGING) {
         logRequest(req, body);
@@ -310,7 +310,7 @@ async function startServers(): Promise<void> {
   availabilityWatchdog.setAvailabilityChangeHandler((serial, isAvailable) => {
     integrationManager.notifyAvailabilityChange(serial, isAvailable);
   });
-  availabilityWatchdog.start();
+  availabilityWatchdog.start(subscriptionManager);
 
   console.log(`[Integrations] ${integrationManager.getActiveCount()} integration(s) loaded`);
 }
