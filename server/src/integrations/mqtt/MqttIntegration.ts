@@ -15,6 +15,7 @@ import { DeviceStateChange, MqttConfig } from '../types';
 import { DeviceStateService } from '../../services/DeviceStateService';
 import { AbstractDeviceStateManager } from '@/services/AbstractDeviceStateManager';
 import { SubscriptionManager } from '../../services/SubscriptionManager';
+import { validateTemperature } from '../../utils/temperatureSafety';
 import {
   parseObjectKey,
   buildStateTopic,
@@ -22,10 +23,8 @@ import {
   parseCommandTopic,
   getCommandTopicPatterns,
 } from './topicBuilder';
-import { publishThermostatDiscovery } from './HomeAssistantDiscovery';
+import { publishThermostatDiscovery, removeDeviceDiscovery } from './HomeAssistantDiscovery';
 import {
-  getDeviceTemperatureScale,
-  convertTemperature,
   nestModeToHA,
   haModeToNest,
   deriveHvacAction,
@@ -44,6 +43,7 @@ export class MqttIntegration extends BaseIntegration {
   private subscriptionManager: SubscriptionManager;
   private userDeviceSerials: Set<string> = new Set();
   private isReady: boolean = false;
+  private deviceWatchInterval: NodeJS.Timeout | null = null;
 
   constructor(
     userId: string,
@@ -83,11 +83,104 @@ export class MqttIntegration extends BaseIntegration {
 
       await this.publishInitialState();
 
+      this.startDeviceWatching();
+
       this.isReady = true;
       console.log(`[MQTT:${this.userId}] Integration initialized successfully`);
     } catch (error) {
       console.error(`[MQTT:${this.userId}] Failed to initialize:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Start polling for device changes
+   */
+  private startDeviceWatching(): void {
+    if (this.deviceWatchInterval) {
+      clearInterval(this.deviceWatchInterval);
+    }
+
+    this.deviceWatchInterval = setInterval(async () => {
+      await this.checkForDeviceChanges();
+    }, 10000);
+
+    console.log(`[MQTT:${this.userId}] Started watching for device changes (polling every 10s)`);
+  }
+
+  /**
+   * Check for added/removed devices and update accordingly
+   */
+  private async checkForDeviceChanges(): Promise<void> {
+    if (!this.isReady) return;
+
+    try {
+      const ownedDevices = await this.deviceStateManager.listUserDevices(this.userId);
+      const sharedDevices = await this.deviceStateManager.getSharedWithMe(this.userId);
+
+      const currentSerials = new Set<string>();
+      for (const device of ownedDevices) {
+        currentSerials.add(device.serial);
+      }
+      for (const share of sharedDevices) {
+        currentSerials.add(share.serial);
+      }
+
+      // Detect removed devices
+      for (const serial of this.userDeviceSerials) {
+        if (!currentSerials.has(serial)) {
+          console.log(`[MQTT:${this.userId}] Device ${serial} was removed, cleaning up...`);
+          await this.handleDeviceRemoved(serial);
+        }
+      }
+
+      // Detect added devices
+      for (const serial of currentSerials) {
+        if (!this.userDeviceSerials.has(serial)) {
+          console.log(`[MQTT:${this.userId}] New device ${serial} detected, publishing discovery...`);
+          this.userDeviceSerials.add(serial);
+
+          // Publish discovery for new device
+          if (this.config.homeAssistantDiscovery && this.client) {
+            try {
+              await publishThermostatDiscovery(
+                this.client,
+                serial,
+                this.deviceState,
+                this.config.topicPrefix!,
+                this.config.discoveryPrefix!
+              );
+              await this.publishHomeAssistantState(serial);
+              await this.publishAvailability(serial, 'online');
+            } catch (error) {
+              console.error(`[MQTT:${this.userId}] Failed to publish discovery for new device ${serial}:`, error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[MQTT:${this.userId}] Error checking for device changes:`, error);
+    }
+  }
+
+  /**
+   * Handle device removal - clean up HA discovery
+   */
+  private async handleDeviceRemoved(serial: string): Promise<void> {
+    // Remove from local tracking
+    this.userDeviceSerials.delete(serial);
+
+    // Mark device as offline
+    await this.publishAvailability(serial, 'offline');
+
+    // Remove Home Assistant discovery (publishes empty payloads)
+    if (this.config.homeAssistantDiscovery && this.client) {
+      try {
+        await removeDeviceDiscovery(this.client, serial, this.config.discoveryPrefix!);
+        console.log(`[MQTT:${this.userId}] Successfully removed device ${serial} from Home Assistant`);
+      } catch (error) {
+        console.error(`[MQTT:${this.userId}] Failed to remove discovery for ${serial}:`, error);
+      }
     }
   }
 
@@ -295,8 +388,8 @@ export class MqttIntegration extends BaseIntegration {
         return;
       }
 
-      const tempScale = await getDeviceTemperatureScale(serial, this.deviceState);
-
+      // HA sends temperatures in Celsius (as declared in discovery config)
+      // No conversion needed - just validate and pass through
       switch (command) {
         case 'mode':
           const nestMode = haModeToNest(valueStr);
@@ -304,23 +397,17 @@ export class MqttIntegration extends BaseIntegration {
           break;
 
         case 'target_temperature':
-          const tempC = tempScale === 'F'
-            ? (parseFloat(valueStr) - 32) * 5 / 9
-            : parseFloat(valueStr);
+          const tempC = validateTemperature(parseFloat(valueStr), sharedObj.value);
           await this.updateSharedValue(serial, sharedObj, 'target_temperature', tempC);
           break;
 
         case 'target_temperature_low':
-          const tempLowC = tempScale === 'F'
-            ? (parseFloat(valueStr) - 32) * 5 / 9
-            : parseFloat(valueStr);
+          const tempLowC = validateTemperature(parseFloat(valueStr), sharedObj.value);
           await this.updateSharedValue(serial, sharedObj, 'target_temperature_low', tempLowC);
           break;
 
         case 'target_temperature_high':
-          const tempHighC = tempScale === 'F'
-            ? (parseFloat(valueStr) - 32) * 5 / 9
-            : parseFloat(valueStr);
+          const tempHighC = validateTemperature(parseFloat(valueStr), sharedObj.value);
           await this.updateSharedValue(serial, sharedObj, 'target_temperature_high', tempHighC);
           break;
 
@@ -521,6 +608,8 @@ export class MqttIntegration extends BaseIntegration {
 
   /**
    * Publish Home Assistant formatted state for a device
+   * All temperatures are published in Celsius (Nest's internal format)
+   * HA handles display conversion based on user preferences
    */
   private async publishHomeAssistantState(serial: string): Promise<void> {
     if (!this.client || !this.isReady) {
@@ -556,10 +645,10 @@ export class MqttIntegration extends BaseIntegration {
       const device = deviceObj.value || {};
       const shared = sharedObj.value || {};
 
-      const tempScale = await getDeviceTemperatureScale(serial, this.deviceState);
-
-      const currentTemp = convertTemperature(shared.current_temperature || device.current_temperature, tempScale);
-      if (currentTemp !== null) {
+      // Publish temperatures in Celsius (Nest's internal format)
+      // HA discovery declares temperature_unit: C, so HA will convert for display
+      const currentTemp = shared.current_temperature ?? device.current_temperature;
+      if (currentTemp !== null && currentTemp !== undefined) {
         await this.publish(`${prefix}/${serial}/ha/current_temperature`, String(currentTemp), { retain: true, qos: 0 });
       }
 
@@ -567,19 +656,16 @@ export class MqttIntegration extends BaseIntegration {
         await this.publish(`${prefix}/${serial}/ha/current_humidity`, String(device.current_humidity), { retain: true, qos: 0 });
       }
 
-      const targetTemp = convertTemperature(shared.target_temperature, tempScale);
-      if (targetTemp !== null) {
-        await this.publish(`${prefix}/${serial}/ha/target_temperature`, String(targetTemp), { retain: true, qos: 0 });
+      if (shared.target_temperature !== null && shared.target_temperature !== undefined) {
+        await this.publish(`${prefix}/${serial}/ha/target_temperature`, String(shared.target_temperature), { retain: true, qos: 0 });
       }
 
-      const targetLow = convertTemperature(shared.target_temperature_low, tempScale);
-      if (targetLow !== null) {
-        await this.publish(`${prefix}/${serial}/ha/target_temperature_low`, String(targetLow), { retain: true, qos: 0 });
+      if (shared.target_temperature_low !== null && shared.target_temperature_low !== undefined) {
+        await this.publish(`${prefix}/${serial}/ha/target_temperature_low`, String(shared.target_temperature_low), { retain: true, qos: 0 });
       }
 
-      const targetHigh = convertTemperature(shared.target_temperature_high, tempScale);
-      if (targetHigh !== null) {
-        await this.publish(`${prefix}/${serial}/ha/target_temperature_high`, String(targetHigh), { retain: true, qos: 0 });
+      if (shared.target_temperature_high !== null && shared.target_temperature_high !== undefined) {
+        await this.publish(`${prefix}/${serial}/ha/target_temperature_high`, String(shared.target_temperature_high), { retain: true, qos: 0 });
       }
 
       const haMode = nestModeToHA(shared.target_temperature_type);
@@ -598,7 +684,8 @@ export class MqttIntegration extends BaseIntegration {
         await this.publish(`${prefix}/${serial}/ha/preset`, preset, { retain: true, qos: 0 });
       }
 
-      let outdoorTempCelsius = device.outdoor_temperature || shared.outside_temperature || device.outside_temperature;
+      // Outdoor temperature (already in Celsius)
+      let outdoorTempCelsius = device.outdoor_temperature ?? shared.outside_temperature ?? device.outside_temperature;
 
       if (outdoorTempCelsius === undefined || outdoorTempCelsius === null) {
         try {
@@ -611,9 +698,8 @@ export class MqttIntegration extends BaseIntegration {
         }
       }
 
-      const outdoorTemp = convertTemperature(outdoorTempCelsius, tempScale);
-      if (outdoorTemp !== null) {
-        await this.publish(`${prefix}/${serial}/ha/outdoor_temperature`, String(outdoorTemp), { retain: true, qos: 0 });
+      if (outdoorTempCelsius !== null && outdoorTempCelsius !== undefined) {
+        await this.publish(`${prefix}/${serial}/ha/outdoor_temperature`, String(outdoorTempCelsius), { retain: true, qos: 0 });
       }
 
       const isAway = await isDeviceAway(serial, this.deviceState);
@@ -701,6 +787,11 @@ export class MqttIntegration extends BaseIntegration {
    */
   async shutdown(): Promise<void> {
     console.log(`[MQTT:${this.userId}] Shutting down...`);
+
+    if (this.deviceWatchInterval) {
+      clearInterval(this.deviceWatchInterval);
+      this.deviceWatchInterval = null;
+    }
 
     if (this.client) {
       for (const serial of this.userDeviceSerials) {
