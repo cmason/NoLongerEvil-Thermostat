@@ -23,6 +23,8 @@ import { logRequest, createResponseLogger, initDebugLogsDir } from './middleware
 import { IntegrationManager } from './integrations/IntegrationManager';
 import { AbstractDeviceStateManager } from './services/AbstractDeviceStateManager';
 import { SQLite3Service } from './services/SQLite3Service';
+import { DeviceAvailabilityWatchdog } from './services/DeviceAvailability';
+
 validateEnvironment();
 
 initializeFileLogging();
@@ -33,6 +35,7 @@ const deviceStateService = new DeviceStateService(deviceStateManager);
 const subscriptionManager = new SubscriptionManager();
 const weatherService = new WeatherService(deviceStateManager);
 const integrationManager = new IntegrationManager();
+const availabilityWatchdog = new DeviceAvailabilityWatchdog();
 
 /**
  * Parse JSON request body
@@ -92,6 +95,11 @@ async function handleDeviceRequest(req: http.IncomingMessage, res: http.ServerRe
       if (environment.DEBUG_LOGGING) {
         logRequest(req);
       }
+      // Mark device as seen (availability heartbeat)
+      const entrySerial = resolveDeviceSerial(req);
+      if (entrySerial) {
+        availabilityWatchdog.markSeen(entrySerial);
+      }
       handleEntry(req, res);
       return;
     }
@@ -147,15 +155,19 @@ async function handleDeviceRequest(req: http.IncomingMessage, res: http.ServerRe
       if (environment.DEBUG_LOGGING) {
         logRequest(req, body);
       }
+      // Note: Device availability is tracked via active subscriptions in SubscriptionManager
       await handleTransportSubscribe(req, res, serial, body, deviceStateService, subscriptionManager, deviceStateManager);
       return;
     }
 
     if (pathname.includes('/put') && method === 'POST') {
+      console.log(`[${new Date().toISOString()}] [Device API] Received PUT from ${serial}`);
       const body = await parseJsonBody(req);
       if (environment.DEBUG_LOGGING) {
         logRequest(req, body);
       }
+      // Mark device as seen (availability heartbeat)
+      availabilityWatchdog.markSeen(serial);
       await handlePut(req, res, serial, body, deviceStateService, subscriptionManager, deviceStateManager);
       return;
     }
@@ -293,6 +305,13 @@ async function startServers(): Promise<void> {
 
   deviceStateService.setIntegrationManager(integrationManager);
 
+  // Start availability watchdog and connect it to integration manager
+  console.log('[DeviceAvailability] Starting availability watchdog...');
+  availabilityWatchdog.setAvailabilityChangeHandler((serial, isAvailable) => {
+    integrationManager.notifyAvailabilityChange(serial, isAvailable);
+  });
+  availabilityWatchdog.start(subscriptionManager);
+
   console.log(`[Integrations] ${integrationManager.getActiveCount()} integration(s) loaded`);
 }
 
@@ -302,6 +321,8 @@ async function startServers(): Promise<void> {
 function setupGracefulShutdown(): void {
   const shutdown = async () => {
     console.log('\n[Shutdown] Received shutdown signal');
+    console.log('[Shutdown] Stopping availability watchdog...');
+    availabilityWatchdog.stop();
     console.log('[Shutdown] Closing integrations...');
     await integrationManager.shutdown();
     console.log('[Shutdown] Closing subscriptions...');
