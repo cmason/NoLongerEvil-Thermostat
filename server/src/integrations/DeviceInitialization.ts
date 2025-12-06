@@ -15,7 +15,7 @@ export class DeviceInitialization {
   async getDeviceEndpoint(device: NestDeviceAPI): Promise<string | null> {
     console.log('[DeviceInitialization] Make sure your device is active while the server is checking...')
     return new Promise((resolve, reject) => {
-      const url = `http://${device.deviceIp}:8080/cgi-bin/settings`;
+      const url = `http://${device.deviceIp}:8080/cgi-bin/api/settings`;
       http.get(url, (res) => {
         let data = '';
 
@@ -49,7 +49,7 @@ export class DeviceInitialization {
    * Update Nest Device endpoint
    */
   async updateDeviceEndpoint(device: NestDeviceAPI, endpoint: string): Promise<boolean> {
-    const url = new URL(`http://${device.deviceIp}:8080/cgi-bin/settings`);
+    const url = new URL(`http://${device.deviceIp}:8080/cgi-bin/api/settings`);
     const options: http.RequestOptions = {
       protocol: url.protocol,
       hostname: url.hostname,
