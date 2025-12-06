@@ -18,7 +18,6 @@ echo
 LINUXROOT="${BUILD_DIR}/deps/root"
 NLEAPIINSTALLDIR="${LINUXROOT}/tmp/nleapi"
 mkdir -p ${NLEAPIINSTALLDIR}
-cp $WORK_DIR/deps/install_httpd.sh ${NLEAPIINSTALLDIR}
 cp $WORK_DIR/deps/nleapi ${NLEAPIINSTALLDIR}
 cp $WORK_DIR/deps/httpd.monitrc ${NLEAPIINSTALLDIR}
 cp $WORK_DIR/deps/version ${NLEAPIINSTALLDIR}

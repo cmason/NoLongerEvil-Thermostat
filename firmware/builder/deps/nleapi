@@ -1,4 +1,4 @@
-!/bin/sh
+#!/bin/sh
 
 # Source common library
 . /etc/init.d/functions
