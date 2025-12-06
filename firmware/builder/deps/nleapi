@@ -1,0 +1,47 @@
+!/bin/sh
+
+# Source common library
+. /etc/init.d/functions
+# Source daemon-monitor library
+. /etc/init.d/dm
+HTTPDCLIENTNAME=httpd
+HTTPDCLIENTAPP=${BINDIR}/${HTTPDCLIENTNAME}
+HTTPDPID="${VARDIR}/run/${HTTPDCLIENTNAME}.pid"
+end_service() {
+local verb="${1}"
+log_info "Service termination for ${HTTPDCLIENTNAME} received from [${PPID}]: ${verb}"
+${STOPDAEMON} -q -x ${HTTPDCLIENTAPP} > ${NULL} 2>&1
+echo_and_log " ${verb} ${HTTPDCLIENTNAME}\c"
+}
+stop_service() {
+end_service "stopping"
+}
+case "${1}" in
+'start')
+monit_service_action start "${HTTPDCLIENTNAME}"
+;;
+'monit_start')
+echo_and_log "NLE API services:\c"
+log_info "Service initiation for ${HTTPDCLIENTNAME} received from [${PPID}]"
+${STARTDAEMON} -q -b -p "${HTTPDPID}" -a "${HTTPDCLIENTAPP}" -- -f -v -p 8080 -h /var/www
+;;
+'stop')
+monit_service_action stop "${HTTPDCLIENTNAME}"
+;;
+'monit_stop')
+echo_and_log "NLE API services:\c"
+stop_service
+;;
+'kill')
+echo_and_log "NLE API services:\c"
+end_service "killing" "--signal KILL"
+echo_and_log "."
+;;
+'restart')
+monit_service_action restart "${HTTPDCLIENTNAME}"
+;;
+*)
+echo "Usage: ${0} <start | stop | kill | restart>"
+exit 1
+;;
+esac

@@ -1,0 +1,80 @@
+#!/bin/sh
+NEST_CONFIG_DIR="/etc/nestlabs"
+TARGET_FILE="$NEST_CONFIG_DIR/client.config"
+API_KEY=$(cat $NEST_CONFIG_DIR/apikey.txt)
+WWWDIR=/var/www
+CGIDIR=${WWWDIR}/cgi-bin
+API_VERSION=$(cat $CGIDIR/version)
+APIDIR=${CGIDIR}/api
+HTTP_RETURN_CODE="400"
+DOWNLOAD_FILE_URL=
+DOWNLOAD_FILE=/tmp/api.zip
+DOWNLOAD_FILE_MD5=
+ACTUAL_FILE_MD5=
+log_writer() {
+  logger "$(date '+%m/%d/%Y %H:%M:%S') - $1"
+}
+return_response() {
+  local http_status="400 Bad Request"
+  local http_output=`printf '%s' "$2"`
+  local content_length=$(printf '%s' "$http_output" | busybox2 wc -c)
+  if [[ "$1" -eq "200" ]]; then
+    http_status="200 Ok"
+  elif [[ "$1" -eq "401" ]]; then
+    http_status="401 Unauthorized"
+  fi
+  log_writer "Status: $http_status"
+  printf 'HTTP/1.1 %s\r\n' "$http_status"
+  printf 'Content-Type: application/json\r\n'
+  printf 'Content-Length: %s\r\n' "$content_length"
+  printf 'Connection: Close\r\n'
+  printf 'X-API-VERSION: %s\r\n' "${API_VERSION}"
+  printf '\r\n'
+  printf '%s' "$http_output"
+  log_writer ""
+  log_writer ""
+  exit 0
+}
+RAW_BODY="$(cat)"
+RAW_BODY="${RAW_BODY// /}"
+if [[ "$REQUEST_METHOD" == "POST" ]]; then
+  API_TOKEN=$(printf '%s\n' "$RAW_BODY" | busybox2 sed -n 's/.*"api_key":"\([^"]*\)".*/\1/p')
+  log_writer "Validate API Key."
+  if [[ "$API_TOKEN" != "$API_KEY" ]]; then
+    log_writer "Invalid or missing API Key."
+    HTTP_OUTPUT=`printf '{"status":"%s"}' "Invalid or Missing API Key."`
+    return_response "401" "$HTTP_OUTPUT"
+  fi
+  log_writer "Get the new API file URL."
+  DOWNLOAD_FILE_URL=$(printf '%s\n' "$RAW_BODY" | busybox2 sed -n 's/.*"api_file_url":"\([^"]*\)".*/\1/p')
+  log_writer "Get new API file MD5."
+  DOWNLOAD_FILE_MD5=$(printf '%s\n' "$RAW_BODY" | busybox2 sed -n 's/.*"api_file_md5":"\([^"]*\)".*/\1/p')
+  if [[ -z "${DOWNLOAD_FILE_URL}" || -z "${DOWNLOAD_FILE_MD5}" ]]; then
+    HTTP_OUTPUT=`printf '{"status":"%s"}' "Missing required parameters."`
+    return_response "400" "$HTTP_OUTPUT"
+  fi
+  log_writer "Download API file from ${DOWNLOAD_FILE_URL}."
+  busybox2 wget -q -O ${DOWNLOAD_FILE} ${DOWNLOAD_FILE_URL} >> /dev/null 2>&1
+  if [[ ! -f ${DOWNLOAD_FILE} ]]; then
+    log_writer "Could not download file."
+    HTTP_OUTPUT=`printf '{"status":"%s"}' "Could not download file."`
+    return_response "400" "$HTTP_OUTPUT"
+  fi
+  ACTUAL_FILE_MD5=$(busybox2 md5sum ${DOWNLOAD_FILE} | busybox2 cut -d ' ' -f 1)
+  if [[ "$ACTUAL_FILE_MD5" != "$DOWNLOAD_FILE_MD5" ]]; then
+    log_writer "File MD5 hash does not match downloaded file MD5."
+    log_writer "Sent MD5 = ${DOWNLOAD_FILE_MD5}"
+    log_writer "File MD5 = ${ACTUAL_FILE_MD5}"
+    HTTP_OUTPUT=`printf '{"status":"%s"}' "File MD5 hash does not match downloaded file MD5."`
+    return_response "400" "${HTTP_OUTPUT}"
+  fi
+  log_writer "MD5 hash matches."
+  rm -fr ${CGIDIR}
+  mkdir -p ${APIDIR}
+  busybox2 unzip -q ${DOWNLOAD_FILE} -d ${WWWDIR}
+  chmod -R 750 ${APIDIR}
+  STATUS=`printf '{"status":"%s"}' "SUCCESS"`
+  HTTP_RETURN_CODE="200"
+fi
+log_writer "$STATUS"
+return_response "$HTTP_RETURN_CODE" "$STATUS"
