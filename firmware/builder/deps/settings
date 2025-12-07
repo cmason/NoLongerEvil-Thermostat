@@ -118,6 +118,7 @@ if [[ "$REQUEST_METHOD" == "POST" ]]; then
       busybox2 sed -i 's|<a key="cloudregisterurl" value="[^"]*"|<a key="cloudregisterurl" value="'$NEW_URL'"|g' $TARGET_FILE
       log_writer "Get new cloudregisterurl."
       get_cloudregisterurl
+      sleep 10 && /etc/init.d/nestlabs restart &
       STATUS=`printf '{"device_name":"%s","status":"%s","cloudregisterurl":"%s"}' $DEVICE_NAME "new" $NEW_URL`
       HTTP_RETURN_CODE="200"
     else
