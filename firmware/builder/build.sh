@@ -601,6 +601,26 @@ ROOTME_EOF
       fi
 
       cat >> "$ROOTME_SCRIPT" << 'ROOTME_EOF'
+cp /tmp/nleapi/nleapi /tmp/1/etc/init.d/nleapi || true
+cp /tmp/nleapi/httpd.monitrc /tmp/1/etc/monit.d/httpd.monitrc || true
+mkdir -p /tmp/1/var/www/cgi-bin/api || true
+cp /tmp/nleapi/version /tmp/1/var/www/cgi-bin/version || true
+cp /tmp/nleapi/update /tmp/1/var/www/cgi-bin/update || true
+cp /tmp/nleapi/settings /tmp/1/var/www/cgi-bin/api/settings || true
+
+chmod +x /tmp/1/etc/init.d/nleapi || true
+chmod +x /tmp/1/var/www/cgi-bin/update || true
+chmod +x /tmp/1/var/www/cgi-bin/api/settings || true
+ln -sf /bin/busybox2 /tmp/1/bin/httpd || true
+if ! grep -q "nleapi start" /tmp/1/etc/init.d/rcS; then
+  echo '${INITDIR}/nleapi start' >> /tmp/1/etc/init.d/rcS
+fi
+if ! grep -q "httpd.monitrc" /tmp/1/etc/monitrc; then
+  echo "include /etc/monit.d/httpd.monitrc" >> /tmp/1/etc/monitrc
+fi
+ROOTME_EOF
+
+      cat >> "$ROOTME_SCRIPT" << 'ROOTME_EOF'
 umount /tmp/1 2>/dev/null || true
 reboot
 ROOTME_EOF
@@ -611,6 +631,8 @@ ROOTME_EOF
     else
       print_warning "rootme script not found at /etc/init.d/rootme"
     fi
+
+    bash scripts/build-nleapi.sh
 
     if [ "$DEBUG_PAUSE" = true ]; then
       echo
