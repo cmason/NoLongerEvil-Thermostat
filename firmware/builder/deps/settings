@@ -44,10 +44,13 @@ valid_ip_port() {
 }
 check_for_api_key() {
  if [[ -z "${API_KEY}" ]]; then
-   log_writer "Missing API key file. Creating it."
-   SECRET=$(grep 'assigned_cred_secret' ${CREDFILE} | busybox2 sed -n 's/.*value="\([^"]*\)".*/\1/p')
-   echo "${SECRET}" > ${NEST_CONFIG_DIR}/apikey.txt
-   API_KEY=$(cat $NEST_CONFIG_DIR/apikey.txt)
+  log_writer "Missing API key file. Creating it."
+  local secret=$(grep 'assigned_cred_secret' ${CREDFILE} | busybox2 sed -n 's/.*value="\([^"]*\)".*/\1/p')
+  if [[ -z "${secret}" ]]; then
+    secret="${DEVICE_NAME}"
+  fi
+  echo "${secret}" > ${NEST_CONFIG_DIR}/apikey.txt
+  API_KEY=$(cat $NEST_CONFIG_DIR/apikey.txt)
  fi
 }
 return_response() {
