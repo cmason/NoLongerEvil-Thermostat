@@ -279,7 +279,6 @@ export interface DeviceSharedWith {
 export interface NestDeviceAPI {
   deviceIp: string;
   deviceId: string;
-  credentials: string;
 }
 
 /**
@@ -289,4 +288,5 @@ export interface NestDeviceSettings {
   device_name: string;
   status: string;
   cloudregisterurl: string;
+  api_key?: string;
 }

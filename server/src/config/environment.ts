@@ -55,7 +55,7 @@ function getNestDevices(devices: string): NestDeviceAPI[] | null {
   if (devices) {
     for (const device of devices.split(',')) {
       const deviceInfo: string[] = device.split(':');
-      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1].substring(2), 'credentials':deviceInfo[2]});
+      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1].substring(2) });
     }
     return nestDevicesApi;
   }

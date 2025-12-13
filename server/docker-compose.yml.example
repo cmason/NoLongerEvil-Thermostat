@@ -14,11 +14,17 @@ services:
       - SQLITE3_ENABLED=true
       - SQLITE3_DB_PATH=./data/database.sqlite
       - ENTRY_KEY_TTL_SECONDS=3600
-      - DEBUG_LOGGING=true
+      - DEBUG_LOGGING=false
       - LOG_DIR=./data/logs
       # If you are running on port 443, the path below should be
       # the location of your certificates.
       - CERT_DIR=
+      # If the below is populated, it will update your device to point
+      # to the API_ORIGIN above. Can have multiple entries separated by
+      # a comma.
+      # Format should be : DEVICE_IP:DEVICE_ID
+      # i.e. NEST_DEVICES=192.168.1.10:ABCDEFGHIJK
+      - NEST_DEVICES=
     volumes:
       - nolongerevil-data:/app/data
 
