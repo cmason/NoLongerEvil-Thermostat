@@ -521,7 +521,7 @@ else
   echo ""
 fi
 
-DEFAULT_URL="https://backdoor.nolongerevil.com"
+DEFAULT_URL="http://backdoor.nolongerevil.com"
 if [ ! -f "$ENV_TEMPLATE" ]; then
   echo "Could not find $ENV_TEMPLATE. Make sure you're running the script from self-hosting-kit/."
   exit 1
@@ -716,7 +716,7 @@ if [ "$HOSTING_MODE" = "selfhosted" ]; then
   echo "  cd firmware/installer && npm run electron:dev"
   echo ""
 
-  if [ "$api_origin" = "https://backdoor.nolongerevil.com" ]; then
+  if [ "$api_origin" = "http://backdoor.nolongerevil.com" ]; then
     echo "After flashing firmware:"
     echo "1. Go to https://nolongerevil.com"
     echo "2. Enter your entry code when prompted"

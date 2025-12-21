@@ -50,8 +50,8 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
  * Validated environment configuration
  */
 export const environment: EnvironmentConfig = {
-  API_ORIGIN: getEnvString('API_ORIGIN', 'https://backdoor.nolongerevil.com'),
-  PROXY_PORT: getEnvInt('PROXY_PORT', 443),
+  API_ORIGIN: getEnvString('API_ORIGIN', 'http://backdoor.nolongerevil.com'),
+  PROXY_PORT: getEnvInt('PROXY_PORT', 80),
   CONTROL_PORT: getEnvInt('CONTROL_PORT', 8081),
 
   CERT_DIR: getEnvNullable('CERT_DIR'),

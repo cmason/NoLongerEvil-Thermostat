@@ -31,7 +31,7 @@ else
     esac
 fi
 
-DEFAULT_API_URL="https://backdoor.nolongerevil.com"
+DEFAULT_API_URL="http://backdoor.nolongerevil.com"
 FIRMWARE_DIR="firmware"
 
 BUILD_XLOADER=false
@@ -485,7 +485,7 @@ build_firmware_multi_gen() {
       USE_CUSTOM_CERT=false
 
       # For hosted mode or default API URL, use the default NoLongerEvil certificate
-      if [ "$HOSTED_MODE" = true ] || [ "$API_URL" = "https://backdoor.nolongerevil.com" ]; then
+      if [ "$HOSTED_MODE" = true ] || [ "$API_URL" = "http://backdoor.nolongerevil.com" ]; then
         CA_CERT_CONTENT="-----BEGIN CERTIFICATE-----
 MIIF+TCCA+GgAwIBAgIUP0dbiF2u6BuJE/7m7jN1amlzSnowDQYJKoZIhvcNAQEL
 BQAwgYsxCzAJBgNVBAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMRIwEAYDVQQH
