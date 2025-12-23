@@ -25,6 +25,12 @@ services:
       # Format should be : DEVICE_IP:DEVICE_ID
       # i.e. NEST_DEVICES=192.168.1.10:ABCDEFGHIJK
       - NEST_DEVICES=
+      # If MQTT is enabled, NEST_DEVICES must be populated.
+      - MQTT_ENABLED=
+      - MQTT_SERVER_IP=
+      - MQTT_SERVER_PORT=
+      - MQTT_USERNAME=
+      - MQTT_PASSWORD=
     volumes:
       - nolongerevil-data:/app/data
 

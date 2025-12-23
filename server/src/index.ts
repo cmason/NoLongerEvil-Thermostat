@@ -337,6 +337,9 @@ function setupGracefulShutdown(): void {
   process.on('SIGINT', shutdown);
 }
 
+/**
+ * Verify device setup
+ */
 async function verifyDeviceSetup(): Promise<void> {
   console.log('[DeviceInitialization] Verify Nest device(s) setup.')
   
@@ -369,15 +372,69 @@ async function verifyDeviceSetup(): Promise<void> {
   }
 }
 
+/**
+ * Verify MQTT Setup
+ */
+async function mqttSetup(): Promise<void> {
+  console.log('[MQTTInitialization] Checking for MQTT setup.');
+
+  // Update enabled/disabled status.
+  await deviceStateManager.updateMqttStatus(environment.MQTT_ENABLED);
+  // If enabled create/update the integration
+  if (environment.MQTT_ENABLED && environment.NEST_DEVICES) {
+    const mqtt_config = {
+      brokerUrl: `mqtt://${environment.MQTT_SERVER_IP}:${environment.MQTT_SERVER_PORT}`,
+      clientId: `nolongerevil-hass`,
+      topicPrefix: 'nest',
+      discoveryPrefix: 'homeassistant',
+      username: `${environment.MQTT_USERNAME}`,
+      password: `${environment.MQTT_PASSWORD}`,
+      homeAssistantDiscovery: true
+    };
+    const exist_mqtt = await deviceStateManager.getMqttIntegration(environment.MQTT_DEFAULT_ID);
+    if (!exist_mqtt) {
+      // Setup MQTT Integration for Devices
+
+      // Create deviceOwner account if needed.
+      for (const device of environment.NEST_DEVICES) {
+        let createDeviceOwner = false;
+        const deviceOwner = await deviceStateManager.getDeviceOwner(device.deviceId);
+        if (deviceOwner) {
+          // Check if MQTT default id
+          if (deviceOwner.userId != environment.MQTT_DEFAULT_ID) {
+            createDeviceOwner = true;
+          }
+        } else {
+          createDeviceOwner = true;
+        }
+
+        if (createDeviceOwner) {
+          console.log(`[MQTTInitialization] Create device owner (${environment.MQTT_DEFAULT_ID})`);
+          await deviceStateManager.insertDeviceOwner(environment.MQTT_DEFAULT_ID, device.deviceId);
+        }
+      }
+
+      // Create integration.
+      console.log(`[MQTTIntegration] Create MQTT integration.`);
+      await deviceStateManager.insertMqttIntegration(mqtt_config);
+    } else {
+      // MQTT integration already setup. Update from environment.
+      console.log(`[MQTTIntegration] Setup exists. Update from environment.`);
+      await deviceStateManager.updateMqttConfig(mqtt_config);
+    }
+  }
+}
+
 console.log('='.repeat(60));
 console.log('NoLongerEvil Thermostat API Server (TypeScript)');
 console.log('='.repeat(60));
 
 (async () => {
+  await verifyDeviceSetup();
+  await mqttSetup();
+
   await startServers();
   setupGracefulShutdown();
-
-  await verifyDeviceSetup();
 
   console.log('\n[Server] Initialization complete');
   console.log('[Server] Press Ctrl+C to stop\n');

@@ -136,6 +136,12 @@ export interface EnvironmentConfig {
   DEBUG_LOGGING: boolean;
   DEBUG_LOGS_DIR: string;
   NEST_DEVICES: NestDeviceAPI[] | null;
+  MQTT_ENABLED: boolean;
+  MQTT_SERVER_IP: string | null;
+  MQTT_SERVER_PORT: number;
+  MQTT_USERNAME: string | null;
+  MQTT_PASSWORD: string | null;
+  MQTT_DEFAULT_ID: string;
 }
 
 /**
@@ -289,4 +295,28 @@ export interface NestDeviceSettings {
   status: string;
   cloudregisterurl: string;
   api_key?: string;
+}
+
+/**
+ * Integrations
+ */
+export interface MqttIntegration {
+  userId: string;
+  type: string;
+  enabled: number;
+  config: string;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * MQTT Settings
+ */
+export interface MqttSettings {
+  brokerUrl: string;
+  clientId: string;
+  topicPrefix: string;
+  discoveryPrefix: string;
+  username: string;
+  password: string;
+  homeAssistantDiscovery: boolean;
 }

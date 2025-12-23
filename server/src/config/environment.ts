@@ -55,7 +55,7 @@ function getNestDevices(devices: string): NestDeviceAPI[] | null {
   if (devices) {
     for (const device of devices.split(',')) {
       const deviceInfo: string[] = device.split(':');
-      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1].substring(2) });
+      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1] });
     }
     return nestDevicesApi;
   }
@@ -85,6 +85,13 @@ export const environment: EnvironmentConfig = {
   SQLITE3_DB_PATH: getEnvString('SQLITE3_DB_PATH', './data/database.sqlite'),
 
   NEST_DEVICES: getNestDevices(getEnvString('NEST_DEVICES', '')),
+
+  MQTT_ENABLED: getEnvBoolean('MQTT_ENABLED', false),
+  MQTT_SERVER_IP: getEnvString('MQTT_SERVER_IP', ''),
+  MQTT_SERVER_PORT: getEnvInt('MQTT_SERVER_PORT', 0),
+  MQTT_USERNAME: getEnvString('MQTT_USERNAME', ''),
+  MQTT_PASSWORD: getEnvString('MQTT_PASSWORD', ''),
+  MQTT_DEFAULT_ID: getEnvString('MQTT_DEFAULT_ID', 'homeassistant')
 };
 
 /**
@@ -108,6 +115,18 @@ export function validateEnvironment(): void {
 
   if (environment.CONTROL_PORT < 1 || environment.CONTROL_PORT > 65535) {
     errors.push(`Invalid CONTROL_PORT: ${environment.CONTROL_PORT} (must be 1-65535)`);
+  }
+
+  if (environment.MQTT_ENABLED) {
+    if (!environment.NEST_DEVICES) {
+      errors.push('NEST_DEVICES must be populated.');
+    }
+    if (!environment.MQTT_SERVER_IP) {
+      errors.push('MQTT_SERVER_IP must be populated.');
+    }
+    if (environment.MQTT_SERVER_PORT < 1 || environment.MQTT_SERVER_PORT > 65535) {
+      errors.push(`Invalid MQTT_SERVER_PORT: ${environment.MQTT_SERVER_PORT} (must be 1-65535)`);
+    }
   }
 
   warnings.forEach(warning => {
