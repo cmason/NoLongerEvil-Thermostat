@@ -385,11 +385,11 @@ async function mqttSetup(): Promise<void> {
     const mqtt_config = {
       brokerUrl: `mqtt://${environment.MQTT_SERVER_IP}:${environment.MQTT_SERVER_PORT}`,
       clientId: `nolongerevil-hass`,
-      topicPrefix: 'nest',
-      discoveryPrefix: 'homeassistant',
+      topicPrefix: `${environment.MQTT_TOPIC_PREFIX}`,
+      discoveryPrefix: `${environment.MQTT_DISCOVERY_PREFIX}`,
       username: `${environment.MQTT_USERNAME}`,
       password: `${environment.MQTT_PASSWORD}`,
-      homeAssistantDiscovery: true
+      homeAssistantDiscovery: environment.MQTT_HA_DISCOVERY
     };
     const exist_mqtt = await deviceStateManager.getMqttIntegration(environment.MQTT_DEFAULT_ID);
     if (!exist_mqtt) {

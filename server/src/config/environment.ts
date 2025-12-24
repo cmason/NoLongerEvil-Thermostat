@@ -91,7 +91,11 @@ export const environment: EnvironmentConfig = {
   MQTT_SERVER_PORT: getEnvInt('MQTT_SERVER_PORT', 0),
   MQTT_USERNAME: getEnvString('MQTT_USERNAME', ''),
   MQTT_PASSWORD: getEnvString('MQTT_PASSWORD', ''),
-  MQTT_DEFAULT_ID: getEnvString('MQTT_DEFAULT_ID', 'homeassistant')
+  MQTT_DEFAULT_ID: getEnvString('MQTT_DEFAULT_ID', 'homeassistant'),
+  MQTT_CLIENT_ID: getEnvString('MQTT_CLIENT_ID', 'nolongerevil-hass'),
+  MQTT_TOPIC_PREFIX: getEnvString('MQTT_TOPIC_PREFIX', 'nest'),
+  MQTT_DISCOVERY_PREFIX: getEnvString('MQTT_DISCOVERY_PREFIX', 'homeassistant'),
+  MQTT_HA_DISCOVERY: getEnvBoolean('MQTT_HA_DISCOVERY', false)
 };
 
 /**

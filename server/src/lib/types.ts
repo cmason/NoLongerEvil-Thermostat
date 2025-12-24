@@ -142,6 +142,10 @@ export interface EnvironmentConfig {
   MQTT_USERNAME: string | null;
   MQTT_PASSWORD: string | null;
   MQTT_DEFAULT_ID: string;
+  MQTT_CLIENT_ID: string | null;
+  MQTT_TOPIC_PREFIX: string | null;
+  MQTT_DISCOVERY_PREFIX: string | null;
+  MQTT_HA_DISCOVERY: boolean;
 }
 
 /**
@@ -309,9 +313,9 @@ export interface MqttIntegration {
   updatedAt: string;
 }
 /**
- * MQTT Settings
+ * HA Settings
  */
-export interface MqttSettings {
+export interface HomeAssistantSettings {
   brokerUrl: string;
   clientId: string;
   topicPrefix: string;
