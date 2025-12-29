@@ -18,6 +18,8 @@ import type {
   DialogState,
   APIKey,
   DeviceSharedWith,
+  MqttIntegration,
+  HomeAssistantSettings,
 } from '../lib/types';
 import { environment } from '../config/environment';
 import { AbstractDeviceStateManager } from './AbstractDeviceStateManager';
@@ -180,6 +182,25 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     })();
 
     return this.initPromise;
+  }
+
+  /**
+   * Get Device ID
+   */
+  async getDeviceByID(serial: string): Promise<string | null> {
+    const db = await this.getDb();
+    if (!db) {
+      return null;
+    }
+
+    try {
+      const sql = `SELECT DISTINCT serial FROM states WHERE serial = ?`;
+      const row = await db.get<DeviceObject>(sql, [serial]);
+      return row ? row.serial : null;
+    } catch (error) {
+      console.error(`[SQLite3] Failed to get state for ${serial}: `, error);
+      return null;
+    }
   }
 
   /**
@@ -432,6 +453,22 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     } catch (error) {
       console.error(`[SQLite3] Failed to generate entry key for ${serial}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Create device owner
+   */
+  async insertDeviceOwner(userId: string, serial: string): Promise<void> {
+    const db = await this.getDb();
+    if (!db) { return; }
+
+    try {
+      await db.run(`INSERT INTO deviceOwners (userId, serial, createdAt) 
+        VALUES (?, ?, strftime('%s','now'))`, [userId, serial]);
+    } catch (error) {
+      console.error(`[SQLite3] Failed to insert device owner (${userId}) for device. ${serial}`);
+      return;
     }
   }
 
@@ -858,6 +895,88 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     } catch (error) {
       console.error('[SQLite3] Failed to fetch enabled MQTT integrations:', error);
       return [];
+    }
+  }
+
+  /**
+   * Insert MQTT integration config
+   */
+  async insertMqttIntegration(haSettings: HomeAssistantSettings): Promise<void> {
+    const db = await this.getDb();
+    if (!db) {
+      return;
+    }
+
+    try {
+      const sql = `INSERT INTO integrations (userId, type, enabled, config, createdAt, updatedAt)
+        VALUES(?, 'mqtt', 1, ?, ?, ?)`;
+      await db.run(sql, [environment.MQTT_DEFAULT_ID, JSON.stringify(haSettings), Date.now(), Date.now()]);
+    } catch (error) {
+      console.error('[SQLite3] Failed to insert MQTT integration settings: ', error);
+      return;
+    }
+  }
+
+  /**
+   * Get MQTT integration config
+   */
+  async getMqttIntegration(userId: string): Promise<MqttIntegration | null> {
+    const db = await this.getDb();
+    if (!db) { return null; }
+
+    try {
+      const sql = `SELECT userId, type, enabled, config, createdAt, updatedAt FROM
+        integrations where userId = ?`;
+      const row = await db.get<MqttIntegration>(sql, [userId]);
+
+      return row ? {
+        userId: row.userId,
+        type: row.type,
+        enabled: row.enabled,
+        config: row.config,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt
+      } : null;
+    } catch (error) {
+      console.error(`[SQLite3] Failed to get MQTT integration for ${userId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update MQTT status (enabled or disabled)
+   */
+  async updateMqttStatus(enable: boolean): Promise<void> {
+    const db = await this.getDb();
+    if (!db) {
+      return;
+    }
+
+    try {
+      const enabled = (enable) ? 1 : 0;
+      const sql = `UPDATE integrations SET enabled = ? where type = 'mqtt' and userId = '${environment.MQTT_DEFAULT_ID}'`;
+      await db.run(sql, [enabled]);
+    } catch (error) {
+      console.error('[SQLite3] Failed to update MQTT integration: ', error);
+      return;
+    }
+  }
+
+  /**
+   * Update MQTT integration config
+   */
+  async updateMqttConfig(haSettings: HomeAssistantSettings): Promise<void> {
+    const db = await this.getDb();
+    if (!db) {
+      return;
+    }
+
+    try {
+      const sql = `UPDATE integrations SET config = ? where type = 'mqtt' and userId = '${environment.MQTT_DEFAULT_ID}'`;
+      await db.run(sql, [JSON.stringify(haSettings)]);
+    } catch (error) {
+      console.error('[SQLite3] Failed to update MQTT integration: ', error);
+      return;
     }
   }
 

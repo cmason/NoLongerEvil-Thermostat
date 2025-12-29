@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import type { EnvironmentConfig } from '../lib/types';
+import type { EnvironmentConfig, NestDeviceAPI } from '../lib/types';
 
 if (fs.existsSync(path.resolve(process.cwd(), '.env.local'))) {
   console.log('[Config] Found .env.local file. Using this for environment setup.')
@@ -47,6 +47,22 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 }
 
 /**
+ * Get Nest Device(s)
+ */
+function getNestDevices(devices: string): NestDeviceAPI[] | null {
+  let nestDevicesApi: NestDeviceAPI[] = [];
+
+  if (devices) {
+    for (const device of devices.split(',')) {
+      const deviceInfo: string[] = device.split(':');
+      nestDevicesApi.push({ deviceIp:deviceInfo[0], deviceId:deviceInfo[1] });
+    }
+    return nestDevicesApi;
+  }
+  return null;
+}
+
+/**
  * Validated environment configuration
  */
 export const environment: EnvironmentConfig = {
@@ -67,6 +83,19 @@ export const environment: EnvironmentConfig = {
 
   SQLITE3_ENABLED: getEnvBoolean('SQLITE3_ENABLED', true),
   SQLITE3_DB_PATH: getEnvString('SQLITE3_DB_PATH', './data/database.sqlite'),
+
+  NEST_DEVICES: getNestDevices(getEnvString('NEST_DEVICES', '')),
+
+  MQTT_ENABLED: getEnvBoolean('MQTT_ENABLED', false),
+  MQTT_SERVER_IP: getEnvString('MQTT_SERVER_IP', ''),
+  MQTT_SERVER_PORT: getEnvInt('MQTT_SERVER_PORT', 0),
+  MQTT_USERNAME: getEnvString('MQTT_USERNAME', ''),
+  MQTT_PASSWORD: getEnvString('MQTT_PASSWORD', ''),
+  MQTT_DEFAULT_ID: getEnvString('MQTT_DEFAULT_ID', 'homeassistant'),
+  MQTT_CLIENT_ID: getEnvString('MQTT_CLIENT_ID', 'nolongerevil-hass'),
+  MQTT_TOPIC_PREFIX: getEnvString('MQTT_TOPIC_PREFIX', 'nest'),
+  MQTT_DISCOVERY_PREFIX: getEnvString('MQTT_DISCOVERY_PREFIX', 'homeassistant'),
+  MQTT_HA_DISCOVERY: getEnvBoolean('MQTT_HA_DISCOVERY', false)
 };
 
 /**
@@ -90,6 +119,18 @@ export function validateEnvironment(): void {
 
   if (environment.CONTROL_PORT < 1 || environment.CONTROL_PORT > 65535) {
     errors.push(`Invalid CONTROL_PORT: ${environment.CONTROL_PORT} (must be 1-65535)`);
+  }
+
+  if (environment.MQTT_ENABLED) {
+    if (!environment.NEST_DEVICES) {
+      errors.push('NEST_DEVICES must be populated.');
+    }
+    if (!environment.MQTT_SERVER_IP) {
+      errors.push('MQTT_SERVER_IP must be populated.');
+    }
+    if (environment.MQTT_SERVER_PORT < 1 || environment.MQTT_SERVER_PORT > 65535) {
+      errors.push(`Invalid MQTT_SERVER_PORT: ${environment.MQTT_SERVER_PORT} (must be 1-65535)`);
+    }
   }
 
   warnings.forEach(warning => {

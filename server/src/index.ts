@@ -23,6 +23,7 @@ import { logRequest, createResponseLogger, initDebugLogsDir } from './middleware
 import { IntegrationManager } from './integrations/IntegrationManager';
 import { AbstractDeviceStateManager } from './services/AbstractDeviceStateManager';
 import { SQLite3Service } from './services/SQLite3Service';
+import { DeviceInitialization } from './integrations/DeviceInitialization';
 import { DeviceAvailabilityWatchdog } from './services/DeviceAvailability';
 
 validateEnvironment();
@@ -35,6 +36,7 @@ const deviceStateService = new DeviceStateService(deviceStateManager);
 const subscriptionManager = new SubscriptionManager();
 const weatherService = new WeatherService(deviceStateManager);
 const integrationManager = new IntegrationManager();
+const deviceInitialization = new DeviceInitialization();
 const availabilityWatchdog = new DeviceAvailabilityWatchdog();
 
 /**
@@ -335,11 +337,102 @@ function setupGracefulShutdown(): void {
   process.on('SIGINT', shutdown);
 }
 
+/**
+ * Verify device setup
+ */
+async function verifyDeviceSetup(): Promise<void> {
+  console.log('[DeviceInitialization] Verify Nest device(s) setup.')
+  
+  if (environment.NEST_DEVICES) {
+    const server_origin = environment.API_ORIGIN + '/entry';
+    for (const device of environment.NEST_DEVICES) {
+      console.log(`[DeviceInitialization] Checking device (${device.deviceId}).`);
+      const serial = await deviceStateManager.getDeviceByID(device.deviceId);
+      if (!serial) {
+        console.log(`[DeviceInitialization] Getting device (${device.deviceId}) endpoint url.`);
+        try {
+          const device_endpoint = await deviceInitialization.getDeviceEndpoint(device);
+          if (device_endpoint) {
+            if (device_endpoint == server_origin) {
+              console.log(`[DeviceInitialization] Device (${device.deviceId}) already setup.`);
+            } else {
+              console.log(`[DeviceInitialization] Device (${device.deviceId}) not setup to use this server. Updating...`);
+              await deviceInitialization.updateDeviceEndpoint(device, environment.API_ORIGIN);
+            }
+          }
+        } catch (error) {
+          console.error(`[DeviceInitialization] Failed to validate device (${device.deviceId}).`)
+        }
+      } else {
+        console.log(`[DeviceInitialization] Device (${device.deviceId}) exists in database. No setup needed.`);
+      }
+    }
+  } else {
+    console.log('[DeviceInitialization] No devices setup for initialization. Skip.');
+  }
+}
+
+/**
+ * Verify MQTT Setup
+ */
+async function mqttSetup(): Promise<void> {
+  console.log('[MQTTInitialization] Checking for MQTT setup.');
+
+  // Update enabled/disabled status.
+  await deviceStateManager.updateMqttStatus(environment.MQTT_ENABLED);
+  // If enabled create/update the integration
+  if (environment.MQTT_ENABLED && environment.NEST_DEVICES) {
+    const mqtt_config = {
+      brokerUrl: `mqtt://${environment.MQTT_SERVER_IP}:${environment.MQTT_SERVER_PORT}`,
+      clientId: `nolongerevil-hass`,
+      topicPrefix: `${environment.MQTT_TOPIC_PREFIX}`,
+      discoveryPrefix: `${environment.MQTT_DISCOVERY_PREFIX}`,
+      username: `${environment.MQTT_USERNAME}`,
+      password: `${environment.MQTT_PASSWORD}`,
+      homeAssistantDiscovery: environment.MQTT_HA_DISCOVERY
+    };
+    const exist_mqtt = await deviceStateManager.getMqttIntegration(environment.MQTT_DEFAULT_ID);
+    if (!exist_mqtt) {
+      // Setup MQTT Integration for Devices
+
+      // Create deviceOwner account if needed.
+      for (const device of environment.NEST_DEVICES) {
+        let createDeviceOwner = false;
+        const deviceOwner = await deviceStateManager.getDeviceOwner(device.deviceId);
+        if (deviceOwner) {
+          // Check if MQTT default id
+          if (deviceOwner.userId != environment.MQTT_DEFAULT_ID) {
+            createDeviceOwner = true;
+          }
+        } else {
+          createDeviceOwner = true;
+        }
+
+        if (createDeviceOwner) {
+          console.log(`[MQTTInitialization] Create device owner (${environment.MQTT_DEFAULT_ID})`);
+          await deviceStateManager.insertDeviceOwner(environment.MQTT_DEFAULT_ID, device.deviceId);
+        }
+      }
+
+      // Create integration.
+      console.log(`[MQTTIntegration] Create MQTT integration.`);
+      await deviceStateManager.insertMqttIntegration(mqtt_config);
+    } else {
+      // MQTT integration already setup. Update from environment.
+      console.log(`[MQTTIntegration] Setup exists. Update from environment.`);
+      await deviceStateManager.updateMqttConfig(mqtt_config);
+    }
+  }
+}
+
 console.log('='.repeat(60));
 console.log('NoLongerEvil Thermostat API Server (TypeScript)');
 console.log('='.repeat(60));
 
 (async () => {
+  await verifyDeviceSetup();
+  await mqttSetup();
+
   await startServers();
   setupGracefulShutdown();
 

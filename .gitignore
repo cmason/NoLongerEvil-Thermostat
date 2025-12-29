@@ -120,3 +120,6 @@ next-env.d.ts
 
 # Firmware build artifacts
 firmware/builder/firmware/
+
+# Docker compose
+server/docker-compose.yml

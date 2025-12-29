@@ -135,6 +135,17 @@ export interface EnvironmentConfig {
   MAX_SUBSCRIPTIONS_PER_DEVICE: number;
   DEBUG_LOGGING: boolean;
   DEBUG_LOGS_DIR: string;
+  NEST_DEVICES: NestDeviceAPI[] | null;
+  MQTT_ENABLED: boolean;
+  MQTT_SERVER_IP: string | null;
+  MQTT_SERVER_PORT: number;
+  MQTT_USERNAME: string | null;
+  MQTT_PASSWORD: string | null;
+  MQTT_DEFAULT_ID: string;
+  MQTT_CLIENT_ID: string | null;
+  MQTT_TOPIC_PREFIX: string | null;
+  MQTT_DISCOVERY_PREFIX: string | null;
+  MQTT_HA_DISCOVERY: boolean;
 }
 
 /**
@@ -270,4 +281,46 @@ export interface DeviceSharedWith {
   permissions: APIKeyPermissions;
   db_perms: string;
   createdAt: number;
+}
+
+/**
+ * Nest Device API
+ */
+export interface NestDeviceAPI {
+  deviceIp: string;
+  deviceId: string;
+}
+
+/**
+ * Nest Device API Response
+ */
+export interface NestDeviceSettings {
+  device_name: string;
+  status: string;
+  cloudregisterurl: string;
+  api_key?: string;
+}
+
+/**
+ * Integrations
+ */
+export interface MqttIntegration {
+  userId: string;
+  type: string;
+  enabled: number;
+  config: string;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * HA Settings
+ */
+export interface HomeAssistantSettings {
+  brokerUrl: string;
+  clientId: string;
+  topicPrefix: string;
+  discoveryPrefix: string;
+  username: string;
+  password: string;
+  homeAssistantDiscovery: boolean;
 }
