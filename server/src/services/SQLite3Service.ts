@@ -18,8 +18,8 @@ import type {
   DialogState,
   APIKey,
   DeviceSharedWith,
-  MqttSettings,
   MqttIntegration,
+  HomeAssistantSettings,
 } from '../lib/types';
 import { environment } from '../config/environment';
 import { AbstractDeviceStateManager } from './AbstractDeviceStateManager';
@@ -901,7 +901,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
   /**
    * Insert MQTT integration config
    */
-  async insertMqttIntegration(mqttSettings: MqttSettings): Promise<void> {
+  async insertMqttIntegration(haSettings: HomeAssistantSettings): Promise<void> {
     const db = await this.getDb();
     if (!db) {
       return;
@@ -910,7 +910,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
     try {
       const sql = `INSERT INTO integrations (userId, type, enabled, config, createdAt, updatedAt)
         VALUES(?, 'mqtt', 1, ?, ?, ?)`;
-      await db.run(sql, [environment.MQTT_DEFAULT_ID, JSON.stringify(mqttSettings), Date.now(), Date.now()]);
+      await db.run(sql, [environment.MQTT_DEFAULT_ID, JSON.stringify(haSettings), Date.now(), Date.now()]);
     } catch (error) {
       console.error('[SQLite3] Failed to insert MQTT integration settings: ', error);
       return;
@@ -965,7 +965,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
   /**
    * Update MQTT integration config
    */
-  async updateMqttConfig(mqttSettings: MqttSettings): Promise<void> {
+  async updateMqttConfig(haSettings: HomeAssistantSettings): Promise<void> {
     const db = await this.getDb();
     if (!db) {
       return;
@@ -973,7 +973,7 @@ export class SQLite3Service extends AbstractDeviceStateManager {
 
     try {
       const sql = `UPDATE integrations SET config = ? where type = 'mqtt' and userId = '${environment.MQTT_DEFAULT_ID}'`;
-      await db.run(sql, [JSON.stringify(mqttSettings)]);
+      await db.run(sql, [JSON.stringify(haSettings)]);
     } catch (error) {
       console.error('[SQLite3] Failed to update MQTT integration: ', error);
       return;

@@ -12,8 +12,8 @@ import type {
   StateWeatherCache,
   WeatherData,
   DeviceStateStore,
-  MqttSettings,
   MqttIntegration,
+  HomeAssistantSettings,
 } from '../lib/types';
 
 export abstract class AbstractDeviceStateManager {
@@ -114,7 +114,7 @@ export abstract class AbstractDeviceStateManager {
   /**
    * Insert MQTT integration config
    */
-  abstract insertMqttIntegration(mqttSettings: MqttSettings): Promise<void>;
+  abstract insertMqttIntegration(mqttSettings: HomeAssistantSettings): Promise<void>;
 
   /**
    * Get MQTT integration config
@@ -129,7 +129,7 @@ export abstract class AbstractDeviceStateManager {
   /**
    * Update MQTT integration config
    */
-  abstract updateMqttConfig(mqttSettings: MqttSettings): Promise<void>;
+  abstract updateMqttConfig(mqttSettings: HomeAssistantSettings): Promise<void>;
   
   /**
    * Validate API key for authentication
